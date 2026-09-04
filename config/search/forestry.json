@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "description": "Forestry-first taxonomy for scholarship discovery and semantic matching.",
+  "tiers": {
+    "direct": [
+      "forestry",
+      "forest science",
+      "forest management",
+      "silviculture",
+      "forest ecology",
+      "forest biology",
+      "tropical forestry"
+    ],
+    "wildlife": [
+      "wildlife management",
+      "wildlife conservation",
+      "wildlife ecology",
+      "zoology"
+    ],
+    "conservation": [
+      "conservation biology",
+      "biodiversity",
+      "ecosystem management",
+      "restoration ecology"
+    ],
+    "natural_resources": [
+      "natural resource management",
+      "land management",
+      "environmental management"
+    ],
+    "climate": [
+      "climate change",
+      "forest carbon",
+      "REDD+",
+      "climate adaptation",
+      "climate mitigation"
+    ],
+    "technology": [
+      "GIS",
+      "remote sensing",
+      "forest monitoring",
+      "geospatial science"
+    ],
+    "socioeconomic": [
+      "agroforestry",
+      "community forestry",
+      "forest livelihoods",
+      "environmental policy"
+    ]
+  },
+  "weights": {
+    "forestry": 1.0,
+    "forest_management": 1.0,
+    "wildlife_conservation": 0.95,
+    "forest_ecology": 0.95,
+    "conservation_biology": 0.9,
+    "natural_resources": 0.88,
+    "biodiversity": 0.85,
+    "climate_change": 0.7,
+    "GIS": 0.65,
+    "environmental_science": 0.6
+  }
+}
