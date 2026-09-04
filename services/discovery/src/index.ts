@@ -56,6 +56,7 @@ function canonicalizeUrl(input: string): string {
   } catch { return input.trim().toLowerCase(); }
 }
 
+export { createDiscoveryEngine } from "./factory";
 export { HttpPageSource } from "./http";
 export { normalizeDiscoveryRecord, normalizeDiscoveryRecords } from "./normalize";
 export type { NormalizedScholarship } from "./normalize";
