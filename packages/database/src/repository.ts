@@ -1,6 +1,15 @@
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { createDatabase } from "./client";
 import { discoveryRecords, scholarshipFunding, scholarshipSnapshots, scholarshipSources, scholarships } from "./schema";
+
+export interface ScholarshipEligibilityEvidence {
+  internationalStudents?: boolean;
+  eligibleNationalities?: string[];
+  excludedNationalities?: string[];
+  minimumAcademicScore?: number;
+  academicScale?: number;
+  text?: string;
+}
 
 export interface ScholarshipPersistenceInput {
   canonicalKey: string;
@@ -14,14 +23,7 @@ export interface ScholarshipPersistenceInput {
   applicationUrl?: string;
   fundingClass: string;
   deadline?: string;
-  eligibility?: {
-    internationalStudents?: boolean;
-    eligibleNationalities?: string[];
-    excludedNationalities?: string[];
-    minimumAcademicScore?: number;
-    academicScale?: number;
-    text?: string;
-  };
+  eligibility?: ScholarshipEligibilityEvidence;
   evidence?: {
     title: string;
     snippet?: string;
@@ -34,7 +36,7 @@ export interface ScholarshipPersistenceInput {
       insuranceCovered?: boolean;
       text: string;
     };
-    eligibility?: ScholarshipPersistenceInput["eligibility"];
+    eligibility?: ScholarshipEligibilityEvidence;
   };
 }
 
@@ -133,6 +135,21 @@ export function createScholarshipRepository(databaseUrl?: string) {
       const funding = await db.select().from(scholarshipFunding).where(eq(scholarshipFunding.scholarshipId, id)).limit(1);
       const snapshots = await db.select().from(scholarshipSnapshots).where(eq(scholarshipSnapshots.scholarshipId, id)).orderBy(desc(scholarshipSnapshots.capturedAt)).limit(10);
       return { ...rows[0], sources, funding: funding[0], snapshots };
+    },
+
+    async getLatestEligibilityEvidence(ids: string[]) {
+      if (!ids.length) return new Map<string, ScholarshipEligibilityEvidence>();
+      const rows = await db.select({ scholarshipId: scholarshipSnapshots.scholarshipId, evidence: scholarshipSnapshots.evidence, capturedAt: scholarshipSnapshots.capturedAt })
+        .from(scholarshipSnapshots)
+        .where(inArray(scholarshipSnapshots.scholarshipId, ids))
+        .orderBy(desc(scholarshipSnapshots.capturedAt));
+      const result = new Map<string, ScholarshipEligibilityEvidence>();
+      for (const row of rows) {
+        if (result.has(row.scholarshipId)) continue;
+        const evidence = row.evidence as { eligibility?: ScholarshipEligibilityEvidence } | null;
+        if (evidence?.eligibility) result.set(row.scholarshipId, evidence.eligibility);
+      }
+      return result;
     },
 
     async listScholarships(filters: { fundingClass?: string; degreeLevel?: string; country?: string; minTrustLevel?: number; limit?: number } = {}) {
