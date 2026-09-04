@@ -4,6 +4,8 @@ export type FundingClass = "fully_funded" | "substantially_funded" | "partial" |
 
 export type EligibilityStatus = "confirmed_eligible" | "probably_eligible" | "cannot_determine" | "not_eligible";
 
+export type OpportunityType = "scholarship" | "studentship" | "research_position" | "assistantship" | "fellowship" | "grant" | "other";
+
 export interface ApplicantProfile {
   nationality: string;
   degreeLevel: DegreeLevel;
@@ -28,6 +30,7 @@ export interface ScholarshipCandidate {
   university?: string;
   country?: string;
   degreeLevel?: DegreeLevel;
+  opportunityType?: OpportunityType;
   fields: string[];
   sourceUrl: string;
   applicationUrl?: string;
