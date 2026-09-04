@@ -1,5 +1,5 @@
 import type { DegreeLevel, FundingClass, ScholarshipCandidate } from "@scholarship-agent/shared";
-import { classifyFunding, type FundingEvidence } from "@scholarship-agent/search";
+import { classifyFunding, type FundingEvidence, extractEligibilityEvidence } from "@scholarship-agent/search";
 import type { DiscoveryRecord } from "./index";
 
 export interface NormalizedScholarship extends ScholarshipCandidate {
@@ -9,6 +9,7 @@ export interface NormalizedScholarship extends ScholarshipCandidate {
     snippet?: string;
     sourceUrl: string;
     funding: FundingEvidence;
+    eligibility: NonNullable<ScholarshipCandidate["eligibility"]>;
   };
 }
 
@@ -34,7 +35,7 @@ export function normalizeDiscoveryRecord(record: DiscoveryRecord): NormalizedSch
   const fields = fieldTerms.filter((term) => lower.includes(term.toLowerCase()));
   const funding: FundingEvidence = {
     text,
-    tuitionCovered: /full tuition|100% tuition|tuition (fee )?waiver|fees fully covered|fees covered in full|tuition and fees covered/i.test(text),
+    tuitionCovered: /full tuition|100% tuition|tuition (fee )?waiver|fees fully covered|fees covered in full|tuition and fees covered in full/i.test(text),
     stipendMentioned: /stipend|living allowance|maintenance allowance|monthly allowance|living costs covered/i.test(text),
     accommodationCovered: /accommodation|housing|residential costs/i.test(text),
     travelCovered: /travel (grant|allowance|costs)|flight|airfare|relocation/i.test(text),
@@ -45,6 +46,7 @@ export function normalizeDiscoveryRecord(record: DiscoveryRecord): NormalizedSch
   const applicationUrl = detectApplicationUrl(snippet, record.url);
   const sourceUrl = resolveUrl(record.url, record.url);
   const provider = inferProvider(record.url, record.source);
+  const eligibility = extractEligibilityEvidence(text);
 
   return {
     title,
@@ -55,8 +57,9 @@ export function normalizeDiscoveryRecord(record: DiscoveryRecord): NormalizedSch
     applicationUrl,
     fundingClass,
     deadline,
+    eligibility,
     canonicalKey: canonicalKey(title, provider),
-    evidence: { title, snippet, sourceUrl, funding }
+    evidence: { title, snippet, sourceUrl, funding, eligibility }
   };
 }
 
