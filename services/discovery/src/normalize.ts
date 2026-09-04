@@ -21,12 +21,14 @@ const fieldTerms = [
 ];
 
 export function normalizeDiscoveryRecord(record: DiscoveryRecord): NormalizedScholarship {
-  const title = clean(record.title || "Untitled scholarship opportunity");
-  const text = title;
+  const title = clean(record.title) ?? "Untitled scholarship opportunity";
+  const snippet = clean(record.snippet);
+  const text = `${title} ${snippet ?? ""}`;
   const degreeLevel = detectDegree(text);
   const fields = fieldTerms.filter((term) => text.toLowerCase().includes(term.toLowerCase()));
-  const evidence: FundingEvidence = { text };
+  const evidence: FundingEvidence = { text, stipendMentioned: /stipend|living allowance|maintenance allowance/i.test(text) };
   const fundingClass: FundingClass = classifyFunding(evidence);
+  const deadline = detectDeadline(text);
 
   return {
     title,
@@ -35,8 +37,9 @@ export function normalizeDiscoveryRecord(record: DiscoveryRecord): NormalizedSch
     fields,
     sourceUrl: record.url,
     fundingClass,
+    deadline,
     canonicalKey: canonicalKey(title, record.source),
-    evidence: { title, sourceUrl: record.url }
+    evidence: { title, snippet, sourceUrl: record.url }
   };
 }
 
@@ -44,10 +47,7 @@ export function normalizeDiscoveryRecords(records: DiscoveryRecord[]): Normalize
   const seen = new Set<string>();
   return records.reduce<NormalizedScholarship[]>((items, record) => {
     const item = normalizeDiscoveryRecord(record);
-    if (!seen.has(item.canonicalKey)) {
-      seen.add(item.canonicalKey);
-      items.push(item);
-    }
+    if (!seen.has(item.canonicalKey)) { seen.add(item.canonicalKey); items.push(item); }
     return items;
   }, []);
 }
@@ -55,6 +55,13 @@ export function normalizeDiscoveryRecords(records: DiscoveryRecord[]): Normalize
 function detectDegree(text: string): DegreeLevel | undefined {
   for (const [pattern, level] of degreePatterns) if (pattern.test(text)) return level;
   return undefined;
+}
+
+function detectDeadline(text: string): string | undefined {
+  const match = text.match(/(?:deadline|apply by|application closes?)\s*[:\-]?\s*([A-Z][a-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}[./-]\d{1,2}[./-]\d{4})/i);
+  if (!match) return undefined;
+  const date = new Date(match[1]);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
 function canonicalKey(title: string, provider?: string): string {
@@ -65,6 +72,6 @@ function normalizeText(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 }
 
-function clean(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
+function clean(value: string | undefined): string | undefined {
+  return value?.replace(/\s+/g, " ").trim() || undefined;
 }
