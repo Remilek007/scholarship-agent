@@ -28,7 +28,7 @@ const fieldTerms = [
 
 const opportunityPatterns: Array<[RegExp, OpportunityType]> = [
   [/\b(research assistantship|graduate research assistant|research assistant)\b/i, "assistantship"],
-  [/\b(research position|research student position|funded research position)\b/i, "research_position"],
+  [/\b(research position|research student position|funded research position|funded research project|funded graduate position|MSc student.*funded project|funded thesis)\b/i, "research_position"],
   [/\b(studentship|studentship position)\b/i, "studentship"],
   [/\b(fellowship)\b/i, "fellowship"],
   [/\b(grant)\b/i, "grant"],
@@ -46,7 +46,7 @@ export function normalizeDiscoveryRecord(record: DiscoveryRecord): NormalizedSch
   const funding: FundingEvidence = {
     text,
     tuitionCovered: /full tuition|100% tuition|tuition (fee )?waiver|fees fully covered|fees covered in full|tuition and fees covered in full/i.test(text),
-    stipendMentioned: /stipend|living allowance|maintenance allowance|monthly allowance|living costs covered|bursary/i.test(text),
+    stipendMentioned: /stipend|living allowance|maintenance allowance|monthly allowance|living costs covered|bursary|funding package/i.test(text),
     accommodationCovered: /accommodation|housing|residential costs/i.test(text),
     travelCovered: /travel (grant|allowance|costs)|flight|airfare|relocation/i.test(text),
     insuranceCovered: /health insurance|medical insurance/i.test(text)
