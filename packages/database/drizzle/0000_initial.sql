@@ -48,6 +48,16 @@ CREATE TABLE IF NOT EXISTS scholarship_funding (
   notes text
 );
 
+CREATE TABLE IF NOT EXISTS scholarship_snapshots (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  scholarship_id uuid NOT NULL REFERENCES scholarships(id) ON DELETE CASCADE,
+  source_url text NOT NULL,
+  title text NOT NULL,
+  snippet text,
+  evidence jsonb NOT NULL DEFAULT '{}'::jsonb,
+  captured_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS match_scores (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   scholarship_id uuid NOT NULL REFERENCES scholarships(id) ON DELETE CASCADE,
