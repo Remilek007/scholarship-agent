@@ -1,5 +1,6 @@
+import type { SearchProvider } from "@scholarship-agent/search";
 import { PublicSearchProvider, RssSearchProvider } from "@scholarship-agent/search";
-import { DiscoveryEngine, type ScholarshipSource } from "./index";
+import { DiscoveryEngine, type DiscoveryRecord, type ScholarshipSource } from "./index";
 import { loadDiscoveryConfig } from "./config";
 import { HttpPageSource } from "./http";
 
@@ -11,11 +12,36 @@ export function createDiscoveryEngine(): DiscoveryEngine {
     sources.push(new HttpPageSource({ name: "configured-direct-pages", urls: config.directUrls }));
   }
   if (config.rssFeeds.length) {
-    sources.push(new RssSearchProvider(config.rssFeeds) as unknown as ScholarshipSource);
+    sources.push(adaptSearchProvider(new RssSearchProvider(config.rssFeeds), "rss"));
   }
   if (config.searchEndpoint) {
-    sources.push(new PublicSearchProvider(config.searchEndpoint, config.searchApiKey) as unknown as ScholarshipSource);
+    sources.push(adaptSearchProvider(new PublicSearchProvider(config.searchEndpoint, config.searchApiKey), "public-search"));
   }
 
   return new DiscoveryEngine(sources);
+}
+
+function adaptSearchProvider(provider: SearchProvider, method: string): ScholarshipSource {
+  return {
+    name: provider.name,
+    async search(query: string): Promise<DiscoveryRecord[]> {
+      const results = await provider.search(query);
+      return results.map((result) => ({
+        url: result.url,
+        title: result.title,
+        snippet: result.snippet,
+        source: result.source,
+        discoveryMethod: method,
+        query
+      }));
+    },
+    async healthCheck(): Promise<boolean> {
+      try {
+        await provider.search("scholarship");
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  };
 }
