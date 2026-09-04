@@ -4,7 +4,7 @@ import { createScholarshipRepository } from "@scholarship-agent/database";
 import { createDiscoveryEngine, normalizeDiscoveryRecords, verifySource } from "@scholarship-agent/discovery";
 import { applicantProfileSchema } from "@scholarship-agent/schemas";
 import { buildDiscoveryQueries, scoreCandidate } from "@scholarship-agent/search";
-import type { ScholarshipCandidate } from "@scholarship-agent/shared";
+import type { OpportunityType, ScholarshipCandidate } from "@scholarship-agent/shared";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -71,13 +71,16 @@ app.post("/api/matches", async (req, res) => {
     const includeReview = req.query.includeReview === "true";
     const minTrustLevel = parseTrustLevel(req.query.minTrustLevel, 1);
     if (minTrustLevel === null) return res.status(400).json({ error: "minTrustLevel must be an integer from 1 to 5" });
+    const opportunityType = parseOpportunityType(req.query.opportunityType);
+    if (req.query.opportunityType && !opportunityType) return res.status(400).json({ error: "Invalid opportunityType" });
     const repository = createScholarshipRepository();
-    const rows = await repository.listScholarships({ degreeLevel: parsed.data.degreeLevel, minTrustLevel, limit: 200 });
+    const rows = await repository.listScholarships({ degreeLevel: parsed.data.degreeLevel, minTrustLevel, opportunityType, limit: 200 });
     const evidenceById = await repository.getLatestEligibilityEvidence(rows.map((row) => row.id));
     const scored = rows.map((row) => {
       const candidate: ScholarshipCandidate = {
         title: row.title, provider: row.provider ?? undefined, university: row.university ?? undefined,
         country: row.country ?? undefined, degreeLevel: isDegreeLevel(row.degreeLevel) ? row.degreeLevel : undefined,
+        opportunityType: isOpportunityType(row.opportunityType) ? row.opportunityType : "other",
         fields: Array.isArray(row.fields) ? row.fields : [], sourceUrl: row.sourceUrl,
         applicationUrl: row.applicationUrl ?? undefined, fundingClass: isFundingClass(row.fundingClass) ? row.fundingClass : "unknown",
         deadline: row.deadline?.toISOString(), eligibility: evidenceById.get(row.id)
@@ -97,7 +100,9 @@ app.get("/api/scholarships", async (req, res) => {
     const minTrustLevel = req.query.minTrustLevel ? Number(req.query.minTrustLevel) : undefined;
     const limit = req.query.limit ? Number(req.query.limit) : undefined;
     if (minTrustLevel !== undefined && (!Number.isInteger(minTrustLevel) || minTrustLevel < 1 || minTrustLevel > 5)) return res.status(400).json({ error: "minTrustLevel must be an integer from 1 to 5" });
-    const scholarships = await repository.listScholarships({ fundingClass: typeof req.query.fundingClass === "string" ? req.query.fundingClass : undefined, degreeLevel: typeof req.query.degreeLevel === "string" ? req.query.degreeLevel : undefined, country: typeof req.query.country === "string" ? req.query.country : undefined, minTrustLevel, limit });
+    const opportunityType = parseOpportunityType(req.query.opportunityType);
+    if (req.query.opportunityType && !opportunityType) return res.status(400).json({ error: "Invalid opportunityType" });
+    const scholarships = await repository.listScholarships({ fundingClass: typeof req.query.fundingClass === "string" ? req.query.fundingClass : undefined, degreeLevel: typeof req.query.degreeLevel === "string" ? req.query.degreeLevel : undefined, country: typeof req.query.country === "string" ? req.query.country : undefined, opportunityType, minTrustLevel, limit });
     return res.json({ count: scholarships.length, scholarships });
   } catch (error) { return res.status(500).json({ error: "Failed to load scholarships", details: error instanceof Error ? error.message : "Unknown error" }); }
 });
@@ -123,6 +128,15 @@ function parseTrustLevel(value: unknown, fallback: number): number | null {
   if (typeof value !== "string" || !value) return fallback;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= 5 ? parsed : null;
+}
+
+function parseOpportunityType(value: unknown): OpportunityType | undefined {
+  if (typeof value !== "string" || !value) return undefined;
+  return isOpportunityType(value) ? value : undefined;
+}
+
+function isOpportunityType(value: string | null | undefined): value is OpportunityType {
+  return value === "scholarship" || value === "studentship" || value === "research_position" || value === "assistantship" || value === "fellowship" || value === "grant" || value === "other";
 }
 
 function isDegreeLevel(value: string | null): value is ScholarshipCandidate["degreeLevel"] {
