@@ -35,3 +35,8 @@ export function buildDiscoveryQueries(profile: ApplicantProfile): string[] {
 export function getForestryTerms(): string[] {
   return [...fields];
 }
+
+export { classifyFunding, isFundedEnough } from "./funding";
+export { scoreCandidate } from "./matching";
+export type { SearchProvider, SearchResult } from "./sources";
+export { uniqueSearchResults } from "./sources";
