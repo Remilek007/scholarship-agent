@@ -56,7 +56,7 @@ importers:
   packages/schemas:
     dependencies:
       '@scholarship-agent/shared':
-        workspace:*
+        specifier: workspace:*
         version: link:../shared
       zod:
         specifier: ^4.0.0
@@ -126,7 +126,7 @@ importers:
         version: link:../../packages/database
       '@scholarship-agent/search':
         specifier: workspace:*
-        version: 0.1.0
+        version: link:../../packages/search
       '@scholarship-agent/shared':
         specifier: workspace:*
         version: link:../../packages/shared
