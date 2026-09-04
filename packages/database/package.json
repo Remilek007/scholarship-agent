@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "./src/schema.ts",
+  "main": "./src/index.ts",
   "scripts": {"typecheck": "tsc --noEmit", "build": "tsc", "lint": "tsc --noEmit"},
-  "dependencies": {"drizzle-orm": "^0.44.0"},
-  "devDependencies": {"typescript": "^5.9.2"}
+  "dependencies": {"drizzle-orm": "^0.44.0", "postgres": "^3.4.7"},
+  "devDependencies": {"drizzle-kit": "^0.31.4", "typescript": "^5.9.2"}
 }
