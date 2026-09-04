@@ -1,6 +1,6 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import { createDatabase } from "./client";
-import { discoveryRecords, scholarshipFunding, scholarshipSources, scholarships } from "./schema";
+import { discoveryRecords, scholarshipSources, scholarships } from "./schema";
 
 export interface ScholarshipPersistenceInput {
   canonicalKey: string;
@@ -81,7 +81,7 @@ export function createScholarshipRepository(databaseUrl?: string) {
       if (filters.fundingClass) conditions.push(eq(scholarships.fundingClass, filters.fundingClass));
       if (filters.degreeLevel) conditions.push(eq(scholarships.degreeLevel, filters.degreeLevel));
       if (filters.country) conditions.push(eq(scholarships.country, filters.country));
-      if (filters.minTrustLevel !== undefined) conditions.push(eq(scholarships.trustLevel, filters.minTrustLevel));
+      if (filters.minTrustLevel !== undefined) conditions.push(gte(scholarships.trustLevel, filters.minTrustLevel));
 
       return db.select().from(scholarships)
         .where(conditions.length ? and(...conditions) : undefined)
