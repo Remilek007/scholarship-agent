@@ -14,6 +14,14 @@ export interface ScholarshipPersistenceInput {
   applicationUrl?: string;
   fundingClass: string;
   deadline?: string;
+  eligibility?: {
+    internationalStudents?: boolean;
+    eligibleNationalities?: string[];
+    excludedNationalities?: string[];
+    minimumAcademicScore?: number;
+    academicScale?: number;
+    text?: string;
+  };
   evidence?: {
     title: string;
     snippet?: string;
@@ -26,6 +34,7 @@ export interface ScholarshipPersistenceInput {
       insuranceCovered?: boolean;
       text: string;
     };
+    eligibility?: ScholarshipPersistenceInput["eligibility"];
   };
 }
 
@@ -101,7 +110,10 @@ export function createScholarshipRepository(databaseUrl?: string) {
           sourceUrl: input.evidence.sourceUrl,
           title: input.evidence.title,
           snippet: input.evidence.snippet?.slice(0, 8000),
-          evidence: input.evidence.funding ? { funding: input.evidence.funding } : {}
+          evidence: {
+            ...(input.evidence.funding ? { funding: input.evidence.funding } : {}),
+            ...(input.evidence.eligibility ? { eligibility: input.evidence.eligibility } : input.eligibility ? { eligibility: input.eligibility } : {})
+          }
         });
       }
       return scholarship.id;
