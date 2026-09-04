@@ -1,0 +1,15 @@
+{
+  "name": "@scholarship-agent/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {"dev": "tsx src/index.ts", "typecheck": "tsc --noEmit", "build": "tsc", "lint": "tsc --noEmit"},
+  "dependencies": {
+    "@scholarship-agent/schemas": "workspace:*",
+    "@scholarship-agent/search": "workspace:*",
+    "@scholarship-agent/shared": "workspace:*",
+    "cors": "^2.8.5",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {"@types/cors": "^2.8.17", "@types/express": "^5.0.3", "tsx": "^4.19.2", "typescript": "^5.9.2"}
+}
