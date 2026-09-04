@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {"dev": "tsx src/index.ts", "typecheck": "tsc --noEmit", "build": "tsc", "lint": "tsc --noEmit"},
   "dependencies": {
+    "@scholarship-agent/database": "workspace:*",
+    "@scholarship-agent/discovery": "workspace:*",
     "@scholarship-agent/schemas": "workspace:*",
     "@scholarship-agent/search": "workspace:*",
     "@scholarship-agent/shared": "workspace:*",
