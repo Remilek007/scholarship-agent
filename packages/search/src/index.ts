@@ -14,29 +14,34 @@ const fundingTerms = [
   "research assistantship", "funded research position"
 ];
 
+const discoveryIntents = ["scholarship", "funded master's", "funded MSc", "graduate research position", "research assistantship", "studentship", "fellowship"];
+
 export function buildDiscoveryQueries(profile: ApplicantProfile): string[] {
   const degree = profile.degreeLevel === "masters" ? "master's MSc" : profile.degreeLevel;
   const nationality = profile.nationality;
-  const selected = profile.targetFields.length ? profile.targetFields : fields.slice(0, 6);
+  const selected = profile.targetFields.length ? profile.targetFields : fields.slice(0, 8);
   const queries = new Set<string>();
 
   for (const field of selected) {
-    for (const funding of fundingTerms.slice(0, 4)) {
+    for (const funding of fundingTerms) {
       queries.add(`"${funding}" "${field}" ${degree} "${nationality}"`);
       queries.add(`"${field}" "${funding}" international students`);
     }
-    queries.add(`"${field}" "funded master's" scholarship ${nationality}`);
-    queries.add(`"${field}" "funded MSc" research position`);
+    for (const intent of discoveryIntents) {
+      queries.add(`"${field}" "${intent}" ${nationality}`);
+      queries.add(`"${field}" "${intent}" international students`);
+    }
+    queries.add(`"${field}" funded research project master's supervisor`);
+    queries.add(`"${field}" MSc scholarship university department funding`);
   }
 
   return [...queries];
 }
 
-export function getForestryTerms(): string[] {
-  return [...fields];
-}
+export function getForestryTerms(): string[] { return [...fields]; }
 
 export { classifyFunding, isFundedEnough } from "./funding";
 export { scoreCandidate } from "./matching";
 export type { SearchProvider, SearchResult } from "./sources";
 export { uniqueSearchResults } from "./sources";
+export { PublicSearchProvider, RssSearchProvider } from "./providers";
