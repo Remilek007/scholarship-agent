@@ -38,6 +38,14 @@ export class DiscoveryEngine {
   }
 
   async persist(records: DiscoveryRecord[]) { return persistDiscoveryRecords(records); }
+
+  async health() {
+    const results = await Promise.all(this.sources.map(async (source) => ({
+      name: source.name,
+      healthy: await source.healthCheck()
+    })));
+    return results;
+  }
 }
 
 function deduplicateRecords(records: DiscoveryRecord[]): DiscoveryRecord[] {
