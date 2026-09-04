@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, pgTable, real, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const scholarships = pgTable("scholarships", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -25,7 +25,10 @@ export const scholarshipSources = pgTable("scholarship_sources", {
   sourceType: text("source_type").notNull(),
   isOfficial: boolean("is_official").notNull().default(false),
   lastVerified: timestamp("last_verified", { withTimezone: true })
-});
+}, (table) => ({
+  scholarshipUrlUnique: uniqueIndex("scholarship_sources_scholarship_url_idx").on(table.scholarshipId, table.url),
+  urlIndex: index("scholarship_sources_url_idx").on(table.url)
+}));
 
 export const discoveryRecords = pgTable("discovery_records", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -46,6 +49,16 @@ export const scholarshipFunding = pgTable("scholarship_funding", {
   travelCovered: boolean("travel_covered"),
   insuranceCovered: boolean("insurance_covered"),
   notes: text("notes")
+});
+
+export const scholarshipSnapshots = pgTable("scholarship_snapshots", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  scholarshipId: uuid("scholarship_id").notNull(),
+  sourceUrl: text("source_url").notNull(),
+  title: text("title").notNull(),
+  snippet: text("snippet"),
+  evidence: jsonb("evidence").$type<Record<string, unknown>>().notNull().default({}),
+  capturedAt: timestamp("captured_at", { withTimezone: true }).defaultNow().notNull()
 });
 
 export const matchScores = pgTable("match_scores", {
