@@ -1,5 +1,8 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS scholarships (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  canonical_key text NOT NULL UNIQUE,
   title text NOT NULL,
   provider text,
   university text,
