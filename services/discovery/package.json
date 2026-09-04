@@ -5,6 +5,10 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {"typecheck": "tsc --noEmit", "build": "tsc", "lint": "tsc --noEmit"},
-  "dependencies": {"@scholarship-agent/search": "workspace:*", "@scholarship-agent/shared": "workspace:*"},
+  "dependencies": {
+    "@scholarship-agent/database": "workspace:*",
+    "@scholarship-agent/search": "workspace:*",
+    "@scholarship-agent/shared": "workspace:*"
+  },
   "devDependencies": {"typescript": "^5.9.2"}
 }
