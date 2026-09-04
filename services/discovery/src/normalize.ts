@@ -1,4 +1,4 @@
-import type { DegreeLevel, FundingClass, ScholarshipCandidate } from "@scholarship-agent/shared";
+import type { DegreeLevel, FundingClass, OpportunityType, ScholarshipCandidate } from "@scholarship-agent/shared";
 import { classifyFunding, type FundingEvidence, extractEligibilityEvidence } from "@scholarship-agent/search";
 import type { DiscoveryRecord } from "./index";
 
@@ -26,17 +26,27 @@ const fieldTerms = [
   "agroforestry", "community forestry", "forest carbon", "REDD+", "remote sensing", "GIS"
 ];
 
+const opportunityPatterns: Array<[RegExp, OpportunityType]> = [
+  [/\b(research assistantship|graduate research assistant|research assistant)\b/i, "assistantship"],
+  [/\b(research position|research student position|funded research position)\b/i, "research_position"],
+  [/\b(studentship|studentship position)\b/i, "studentship"],
+  [/\b(fellowship)\b/i, "fellowship"],
+  [/\b(grant)\b/i, "grant"],
+  [/\b(scholarship|funded master's|funded MSc)\b/i, "scholarship"]
+];
+
 export function normalizeDiscoveryRecord(record: DiscoveryRecord): NormalizedScholarship {
   const title = clean(record.title) ?? "Untitled scholarship opportunity";
   const snippet = clean(record.snippet);
   const text = `${title} ${snippet ?? ""}`;
   const lower = text.toLowerCase();
   const degreeLevel = detectDegree(text);
+  const opportunityType = detectOpportunityType(text);
   const fields = fieldTerms.filter((term) => lower.includes(term.toLowerCase()));
   const funding: FundingEvidence = {
     text,
     tuitionCovered: /full tuition|100% tuition|tuition (fee )?waiver|fees fully covered|fees covered in full|tuition and fees covered in full/i.test(text),
-    stipendMentioned: /stipend|living allowance|maintenance allowance|monthly allowance|living costs covered/i.test(text),
+    stipendMentioned: /stipend|living allowance|maintenance allowance|monthly allowance|living costs covered|bursary/i.test(text),
     accommodationCovered: /accommodation|housing|residential costs/i.test(text),
     travelCovered: /travel (grant|allowance|costs)|flight|airfare|relocation/i.test(text),
     insuranceCovered: /health insurance|medical insurance/i.test(text)
@@ -52,6 +62,7 @@ export function normalizeDiscoveryRecord(record: DiscoveryRecord): NormalizedSch
     title,
     provider,
     degreeLevel,
+    opportunityType,
     fields,
     sourceUrl,
     applicationUrl,
@@ -75,6 +86,11 @@ export function normalizeDiscoveryRecords(records: DiscoveryRecord[]): Normalize
 function detectDegree(text: string): DegreeLevel | undefined {
   for (const [pattern, level] of degreePatterns) if (pattern.test(text)) return level;
   return undefined;
+}
+
+function detectOpportunityType(text: string): OpportunityType {
+  for (const [pattern, type] of opportunityPatterns) if (pattern.test(text)) return type;
+  return "other";
 }
 
 function detectDeadline(text: string): string | undefined {
