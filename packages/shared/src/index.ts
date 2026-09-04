@@ -6,6 +6,10 @@ export type EligibilityStatus = "confirmed_eligible" | "probably_eligible" | "ca
 
 export type OpportunityType = "scholarship" | "studentship" | "research_position" | "assistantship" | "fellowship" | "grant" | "other";
 
+export type ApplicationStatus = "discovered" | "review" | "preparing" | "ready" | "submitted" | "withdrawn";
+
+export type ApplicationEventType = "created" | "status_changed" | "document_attached" | "draft_saved" | "review_requested" | "submission_approved" | "submitted";
+
 export interface ApplicantProfile {
   nationality: string;
   degreeLevel: DegreeLevel;
@@ -49,4 +53,30 @@ export interface MatchResult {
   confidence: number;
   overallScore: number;
   reasons: string[];
+}
+
+export interface ApplicationWorkspace {
+  id: string;
+  scholarshipId: string;
+  status: ApplicationStatus;
+  aiPolicy?: "allowed" | "limited" | "prohibited" | "unknown";
+  notes?: string;
+}
+
+export interface ApplicationRequirement {
+  id: string;
+  applicationId: string;
+  name: string;
+  required: boolean;
+  status: "missing" | "ready" | "attached" | "waived";
+  sourceInstruction?: string;
+}
+
+export interface ApplicationAnswer {
+  id: string;
+  applicationId: string;
+  field: string;
+  answer: string;
+  aiPolicy: "allowed" | "limited" | "prohibited" | "unknown";
+  reviewed: boolean;
 }
