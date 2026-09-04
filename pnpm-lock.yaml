@@ -24,6 +24,12 @@ importers:
         specifier: ^7.1.3
         version: 7.1.3
     devDependencies:
+      '@types/react':
+        specifier: ^19.1.12
+        version: 19.1.12
+      '@types/react-dom':
+        specifier: ^19.1.9
+        version: 19.1.9
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
@@ -37,6 +43,9 @@ importers:
         specifier: ^3.4.7
         version: 3.4.7
     devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.3.0
       drizzle-kit:
         specifier: ^0.31.4
         version: 0.31.4
@@ -47,7 +56,7 @@ importers:
   packages/schemas:
     dependencies:
       '@scholarship-agent/shared':
-        specifier: workspace:*
+        workspace:*
         version: link:../shared
       zod:
         specifier: ^4.0.0
@@ -117,7 +126,7 @@ importers:
         version: link:../../packages/database
       '@scholarship-agent/search':
         specifier: workspace:*
-        version: link:../../packages/search
+        version: 0.1.0
       '@scholarship-agent/shared':
         specifier: workspace:*
         version: link:../../packages/shared
