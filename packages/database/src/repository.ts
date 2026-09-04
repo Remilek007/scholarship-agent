@@ -53,7 +53,6 @@ export function createScholarshipRepository(databaseUrl?: string) {
       }).returning({ id: scholarships.id });
 
       if (!scholarship) throw new Error("Scholarship upsert returned no row");
-
       await db.insert(scholarshipSources).values({
         scholarshipId: scholarship.id,
         url: input.sourceUrl,
@@ -61,19 +60,21 @@ export function createScholarshipRepository(databaseUrl?: string) {
         isOfficial: false,
         lastVerified: new Date()
       }).onConflictDoNothing();
-
       return scholarship.id;
     },
 
     async recordDiscovery(input: { url: string; title?: string; source: string; discoveryMethod: string; query?: string }) {
       await db.insert(discoveryRecords).values({
-        url: input.url,
-        title: input.title,
-        source: input.source,
-        discoveryMethod: input.discoveryMethod,
-        query: input.query,
-        status: "processed"
+        url: input.url, title: input.title, source: input.source,
+        discoveryMethod: input.discoveryMethod, query: input.query, status: "processed"
       });
+    },
+
+    async getScholarship(id: string) {
+      const rows = await db.select().from(scholarships).where(eq(scholarships.id, id)).limit(1);
+      if (!rows[0]) return undefined;
+      const sources = await db.select().from(scholarshipSources).where(eq(scholarshipSources.scholarshipId, id));
+      return { ...rows[0], sources };
     },
 
     async listScholarships(filters: { fundingClass?: string; degreeLevel?: string; country?: string; minTrustLevel?: number; limit?: number } = {}) {
@@ -82,7 +83,6 @@ export function createScholarshipRepository(databaseUrl?: string) {
       if (filters.degreeLevel) conditions.push(eq(scholarships.degreeLevel, filters.degreeLevel));
       if (filters.country) conditions.push(eq(scholarships.country, filters.country));
       if (filters.minTrustLevel !== undefined) conditions.push(gte(scholarships.trustLevel, filters.minTrustLevel));
-
       return db.select().from(scholarships)
         .where(conditions.length ? and(...conditions) : undefined)
         .orderBy(desc(scholarships.updatedAt))
