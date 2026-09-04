@@ -68,6 +68,7 @@ app.post("/api/matches", async (req, res) => {
 
     const repository = createScholarshipRepository();
     const rows = await repository.listScholarships({ degreeLevel: parsed.data.degreeLevel, minTrustLevel, limit: 200 });
+    const evidenceById = await repository.getLatestEligibilityEvidence(rows.map((row) => row.id));
     const scored = rows.map((row) => {
       const candidate: ScholarshipCandidate = {
         title: row.title,
@@ -80,7 +81,7 @@ app.post("/api/matches", async (req, res) => {
         applicationUrl: row.applicationUrl ?? undefined,
         fundingClass: isFundingClass(row.fundingClass) ? row.fundingClass : "unknown",
         deadline: row.deadline?.toISOString(),
-        eligibility: undefined
+        eligibility: evidenceById.get(row.id)
       };
       const match = scoreCandidate(parsed.data, candidate);
       return { ...candidate, id: row.id, trustLevel: row.trustLevel, score: Math.round(match.overallScore * 100), ...match };
