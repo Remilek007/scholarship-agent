@@ -40,6 +40,18 @@ export interface ScholarshipPersistenceInput {
   };
 }
 
+export interface SourceVerificationInput {
+  sourceUrl: string;
+  finalUrl?: string;
+  status: string;
+  trustLevel: number;
+  officialSource: boolean;
+  title?: string;
+  evidence: string[];
+  warnings: string[];
+  checkedAt: string;
+}
+
 export function createScholarshipRepository(databaseUrl?: string) {
   const db = createDatabase(databaseUrl);
 
@@ -61,56 +73,32 @@ export function createScholarshipRepository(databaseUrl?: string) {
       }).onConflictDoUpdate({
         target: scholarships.canonicalKey,
         set: {
-          title: input.title,
-          provider: input.provider,
-          university: input.university,
-          country: input.country,
-          degreeLevel: input.degreeLevel,
-          fields: input.fields,
-          sourceUrl: input.sourceUrl,
-          applicationUrl: input.applicationUrl,
-          fundingClass: input.fundingClass,
-          deadline: input.deadline ? new Date(input.deadline) : undefined,
-          updatedAt: new Date()
+          title: input.title, provider: input.provider, university: input.university, country: input.country,
+          degreeLevel: input.degreeLevel, fields: input.fields, sourceUrl: input.sourceUrl,
+          applicationUrl: input.applicationUrl, fundingClass: input.fundingClass,
+          deadline: input.deadline ? new Date(input.deadline) : undefined, updatedAt: new Date()
         }
       }).returning({ id: scholarships.id });
 
       if (!scholarship) throw new Error("Scholarship upsert returned no row");
       const now = new Date();
-      await db.insert(scholarshipSources).values({
-        scholarshipId: scholarship.id,
-        url: input.sourceUrl,
-        sourceType: "discovery",
-        isOfficial: false,
-        lastVerified: now
-      }).onConflictDoNothing();
+      await db.insert(scholarshipSources).values({ scholarshipId: scholarship.id, url: input.sourceUrl, sourceType: "discovery", isOfficial: false, lastVerified: now }).onConflictDoNothing();
 
       const funding = input.evidence?.funding;
       if (funding) {
         await db.insert(scholarshipFunding).values({
-          scholarshipId: scholarship.id,
-          tuitionCovered: funding.tuitionCovered,
-          accommodationCovered: funding.accommodationCovered,
-          travelCovered: funding.travelCovered,
-          insuranceCovered: funding.insuranceCovered,
-          notes: funding.text.slice(0, 4000)
+          scholarshipId: scholarship.id, tuitionCovered: funding.tuitionCovered,
+          accommodationCovered: funding.accommodationCovered, travelCovered: funding.travelCovered,
+          insuranceCovered: funding.insuranceCovered, notes: funding.text.slice(0, 4000)
         }).onConflictDoUpdate({
           target: scholarshipFunding.scholarshipId,
-          set: {
-            tuitionCovered: funding.tuitionCovered,
-            accommodationCovered: funding.accommodationCovered,
-            travelCovered: funding.travelCovered,
-            insuranceCovered: funding.insuranceCovered,
-            notes: funding.text.slice(0, 4000)
-          }
+          set: { tuitionCovered: funding.tuitionCovered, accommodationCovered: funding.accommodationCovered, travelCovered: funding.travelCovered, insuranceCovered: funding.insuranceCovered, notes: funding.text.slice(0, 4000) }
         });
       }
 
       if (input.evidence) {
         await db.insert(scholarshipSnapshots).values({
-          scholarshipId: scholarship.id,
-          sourceUrl: input.evidence.sourceUrl,
-          title: input.evidence.title,
+          scholarshipId: scholarship.id, sourceUrl: input.evidence.sourceUrl, title: input.evidence.title,
           snippet: input.evidence.snippet?.slice(0, 8000),
           evidence: {
             ...(input.evidence.funding ? { funding: input.evidence.funding } : {}),
@@ -122,10 +110,21 @@ export function createScholarshipRepository(databaseUrl?: string) {
     },
 
     async recordDiscovery(input: { url: string; title?: string; source: string; discoveryMethod: string; query?: string }) {
-      await db.insert(discoveryRecords).values({
-        url: input.url, title: input.title, source: input.source,
-        discoveryMethod: input.discoveryMethod, query: input.query, status: "processed"
+      await db.insert(discoveryRecords).values({ url: input.url, title: input.title, source: input.source, discoveryMethod: input.discoveryMethod, query: input.query, status: "processed" });
+    },
+
+    async recordVerification(scholarshipId: string, verification: SourceVerificationInput) {
+      const now = new Date(verification.checkedAt);
+      await db.update(scholarships).set({ trustLevel: Math.max(1, Math.min(5, verification.trustLevel)), updatedAt: now }).where(eq(scholarships.id, scholarshipId));
+      await db.update(scholarshipSources).set({ isOfficial: verification.officialSource, lastVerified: now }).where(and(eq(scholarshipSources.scholarshipId, scholarshipId), eq(scholarshipSources.url, verification.sourceUrl)));
+      await db.insert(scholarshipSnapshots).values({
+        scholarshipId,
+        sourceUrl: verification.finalUrl ?? verification.sourceUrl,
+        title: verification.title ?? "Source verification",
+        snippet: verification.warnings.join(" ").slice(0, 8000) || undefined,
+        evidence: { verification: { status: verification.status, trustLevel: verification.trustLevel, officialSource: verification.officialSource, sourceUrl: verification.sourceUrl, finalUrl: verification.finalUrl, evidence: verification.evidence, warnings: verification.warnings, checkedAt: verification.checkedAt } }
       });
+      return this.getScholarship(scholarshipId);
     },
 
     async getScholarship(id: string) {
@@ -139,10 +138,7 @@ export function createScholarshipRepository(databaseUrl?: string) {
 
     async getLatestEligibilityEvidence(ids: string[]) {
       if (!ids.length) return new Map<string, ScholarshipEligibilityEvidence>();
-      const rows = await db.select({ scholarshipId: scholarshipSnapshots.scholarshipId, evidence: scholarshipSnapshots.evidence, capturedAt: scholarshipSnapshots.capturedAt })
-        .from(scholarshipSnapshots)
-        .where(inArray(scholarshipSnapshots.scholarshipId, ids))
-        .orderBy(desc(scholarshipSnapshots.capturedAt));
+      const rows = await db.select({ scholarshipId: scholarshipSnapshots.scholarshipId, evidence: scholarshipSnapshots.evidence, capturedAt: scholarshipSnapshots.capturedAt }).from(scholarshipSnapshots).where(inArray(scholarshipSnapshots.scholarshipId, ids)).orderBy(desc(scholarshipSnapshots.capturedAt));
       const result = new Map<string, ScholarshipEligibilityEvidence>();
       for (const row of rows) {
         if (result.has(row.scholarshipId)) continue;
@@ -158,10 +154,7 @@ export function createScholarshipRepository(databaseUrl?: string) {
       if (filters.degreeLevel) conditions.push(eq(scholarships.degreeLevel, filters.degreeLevel));
       if (filters.country) conditions.push(eq(scholarships.country, filters.country));
       if (filters.minTrustLevel !== undefined) conditions.push(gte(scholarships.trustLevel, filters.minTrustLevel));
-      return db.select().from(scholarships)
-        .where(conditions.length ? and(...conditions) : undefined)
-        .orderBy(desc(scholarships.updatedAt))
-        .limit(Math.min(Math.max(filters.limit ?? 50, 1), 200));
+      return db.select().from(scholarships).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(scholarships.updatedAt)).limit(Math.min(Math.max(filters.limit ?? 50, 1), 200));
     }
   };
 }
