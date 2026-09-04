@@ -18,6 +18,7 @@ export interface ScholarshipPersistenceInput {
   university?: string;
   country?: string;
   degreeLevel?: string;
+  opportunityType?: string;
   fields: string[];
   sourceUrl: string;
   applicationUrl?: string;
@@ -64,6 +65,7 @@ export function createScholarshipRepository(databaseUrl?: string) {
         university: input.university,
         country: input.country,
         degreeLevel: input.degreeLevel,
+        opportunityType: input.opportunityType ?? "scholarship",
         fields: input.fields,
         sourceUrl: input.sourceUrl,
         applicationUrl: input.applicationUrl,
@@ -74,7 +76,7 @@ export function createScholarshipRepository(databaseUrl?: string) {
         target: scholarships.canonicalKey,
         set: {
           title: input.title, provider: input.provider, university: input.university, country: input.country,
-          degreeLevel: input.degreeLevel, fields: input.fields, sourceUrl: input.sourceUrl,
+          degreeLevel: input.degreeLevel, opportunityType: input.opportunityType ?? "scholarship", fields: input.fields, sourceUrl: input.sourceUrl,
           applicationUrl: input.applicationUrl, fundingClass: input.fundingClass,
           deadline: input.deadline ? new Date(input.deadline) : undefined, updatedAt: new Date()
         }
@@ -82,7 +84,7 @@ export function createScholarshipRepository(databaseUrl?: string) {
 
       if (!scholarship) throw new Error("Scholarship upsert returned no row");
       const now = new Date();
-      await db.insert(scholarshipSources).values({ scholarshipId: scholarship.id, url: input.sourceUrl, sourceType: "discovery", isOfficial: false, lastVerified: now }).onConflictDoNothing();
+      await db.insert(scholarshipSources).values({ scholarshipId: scholarship.id, url: input.sourceUrl, sourceType: input.opportunityType ?? "discovery", isOfficial: false, lastVerified: now }).onConflictDoNothing();
 
       const funding = input.evidence?.funding;
       if (funding) {
@@ -148,11 +150,12 @@ export function createScholarshipRepository(databaseUrl?: string) {
       return result;
     },
 
-    async listScholarships(filters: { fundingClass?: string; degreeLevel?: string; country?: string; minTrustLevel?: number; limit?: number } = {}) {
+    async listScholarships(filters: { fundingClass?: string; degreeLevel?: string; country?: string; opportunityType?: string; minTrustLevel?: number; limit?: number } = {}) {
       const conditions = [];
       if (filters.fundingClass) conditions.push(eq(scholarships.fundingClass, filters.fundingClass));
       if (filters.degreeLevel) conditions.push(eq(scholarships.degreeLevel, filters.degreeLevel));
       if (filters.country) conditions.push(eq(scholarships.country, filters.country));
+      if (filters.opportunityType) conditions.push(eq(scholarships.opportunityType, filters.opportunityType));
       if (filters.minTrustLevel !== undefined) conditions.push(gte(scholarships.trustLevel, filters.minTrustLevel));
       return db.select().from(scholarships).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(scholarships.updatedAt)).limit(Math.min(Math.max(filters.limit ?? 50, 1), 200));
     }
