@@ -74,3 +74,41 @@ export const matchScores = pgTable("match_scores", {
   reasons: jsonb("reasons").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 });
+
+export const applications = pgTable("applications", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  scholarshipId: uuid("scholarship_id").notNull(),
+  status: text("status").notNull().default("discovered"),
+  aiPolicy: text("ai_policy").notNull().default("unknown"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({ scholarshipUnique: uniqueIndex("applications_scholarship_idx").on(table.scholarshipId) }));
+
+export const applicationRequirements = pgTable("application_requirements", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  applicationId: uuid("application_id").notNull(),
+  name: text("name").notNull(),
+  required: boolean("required").notNull().default(true),
+  status: text("status").notNull().default("missing"),
+  sourceInstruction: text("source_instruction"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({ applicationIndex: index("application_requirements_application_idx").on(table.applicationId) }));
+
+export const applicationAnswers = pgTable("application_answers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  applicationId: uuid("application_id").notNull(),
+  field: text("field").notNull(),
+  answer: text("answer").notNull(),
+  aiPolicy: text("ai_policy").notNull().default("unknown"),
+  reviewed: boolean("reviewed").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({ applicationFieldUnique: uniqueIndex("application_answers_application_field_idx").on(table.applicationId, table.field) }));
+
+export const applicationEvents = pgTable("application_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  applicationId: uuid("application_id").notNull(),
+  eventType: text("event_type").notNull(),
+  details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({ applicationIndex: index("application_events_application_idx").on(table.applicationId) }));
