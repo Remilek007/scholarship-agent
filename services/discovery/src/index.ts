@@ -1,5 +1,6 @@
 import { buildDiscoveryQueries } from "@scholarship-agent/search";
 import type { ApplicantProfile } from "@scholarship-agent/shared";
+import { persistDiscoveryRecords } from "./persistence";
 
 export interface DiscoveryRecord {
   url: string;
@@ -18,7 +19,11 @@ export interface ScholarshipSource {
 
 export class DiscoveryEngine {
   constructor(private readonly sources: ScholarshipSource[]) {}
-  async plan(profile: ApplicantProfile): Promise<string[]> { return buildDiscoveryQueries(profile); }
+
+  async plan(profile: ApplicantProfile): Promise<string[]> {
+    return buildDiscoveryQueries(profile);
+  }
+
   async search(profile: ApplicantProfile, queries = buildDiscoveryQueries(profile)): Promise<DiscoveryRecord[]> {
     const records: DiscoveryRecord[] = [];
     for (const query of queries) {
@@ -26,6 +31,12 @@ export class DiscoveryEngine {
       for (const result of results) if (result.status === "fulfilled") records.push(...result.value);
     }
     return deduplicateRecords(records);
+  }
+
+  async searchAndPersist(profile: ApplicantProfile) {
+    const records = await this.search(profile);
+    const persistence = await persistDiscoveryRecords(records);
+    return { records, persistence };
   }
 }
 
