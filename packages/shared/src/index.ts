@@ -13,6 +13,15 @@ export interface ApplicantProfile {
   academicScale?: number;
 }
 
+export interface ScholarshipEligibilityEvidence {
+  internationalStudents?: boolean;
+  eligibleNationalities?: string[];
+  excludedNationalities?: string[];
+  minimumAcademicScore?: number;
+  academicScale?: number;
+  text?: string;
+}
+
 export interface ScholarshipCandidate {
   title: string;
   provider?: string;
@@ -24,6 +33,7 @@ export interface ScholarshipCandidate {
   applicationUrl?: string;
   fundingClass: FundingClass;
   deadline?: string;
+  eligibility?: ScholarshipEligibilityEvidence;
 }
 
 export interface MatchResult {
@@ -31,6 +41,9 @@ export interface MatchResult {
   fieldScore: number;
   fundingScore: number;
   academicScore: number;
+  profileScore: number;
+  deadlineScore: number;
+  confidence: number;
   overallScore: number;
   reasons: string[];
 }
