@@ -8,6 +8,7 @@ export const scholarships = pgTable("scholarships", {
   university: text("university"),
   country: text("country"),
   degreeLevel: text("degree_level"),
+  opportunityType: text("opportunity_type").notNull().default("scholarship"),
   fields: jsonb("fields").$type<string[]>().notNull().default([]),
   sourceUrl: text("source_url").notNull(),
   applicationUrl: text("application_url"),
