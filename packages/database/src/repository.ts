@@ -1,6 +1,6 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import { createDatabase } from "./client";
-import { discoveryRecords, scholarshipSources, scholarships } from "./schema";
+import { discoveryRecords, scholarshipFunding, scholarshipSnapshots, scholarshipSources, scholarships } from "./schema";
 
 export interface ScholarshipPersistenceInput {
   canonicalKey: string;
@@ -14,7 +14,19 @@ export interface ScholarshipPersistenceInput {
   applicationUrl?: string;
   fundingClass: string;
   deadline?: string;
-  evidence?: { title: string; snippet?: string; sourceUrl: string };
+  evidence?: {
+    title: string;
+    snippet?: string;
+    sourceUrl: string;
+    funding?: {
+      tuitionCovered?: boolean;
+      stipendMentioned?: boolean;
+      accommodationCovered?: boolean;
+      travelCovered?: boolean;
+      insuranceCovered?: boolean;
+      text: string;
+    };
+  };
 }
 
 export function createScholarshipRepository(databaseUrl?: string) {
@@ -53,13 +65,45 @@ export function createScholarshipRepository(databaseUrl?: string) {
       }).returning({ id: scholarships.id });
 
       if (!scholarship) throw new Error("Scholarship upsert returned no row");
+      const now = new Date();
       await db.insert(scholarshipSources).values({
         scholarshipId: scholarship.id,
         url: input.sourceUrl,
         sourceType: "discovery",
         isOfficial: false,
-        lastVerified: new Date()
+        lastVerified: now
       }).onConflictDoNothing();
+
+      const funding = input.evidence?.funding;
+      if (funding) {
+        await db.insert(scholarshipFunding).values({
+          scholarshipId: scholarship.id,
+          tuitionCovered: funding.tuitionCovered,
+          accommodationCovered: funding.accommodationCovered,
+          travelCovered: funding.travelCovered,
+          insuranceCovered: funding.insuranceCovered,
+          notes: funding.text.slice(0, 4000)
+        }).onConflictDoUpdate({
+          target: scholarshipFunding.scholarshipId,
+          set: {
+            tuitionCovered: funding.tuitionCovered,
+            accommodationCovered: funding.accommodationCovered,
+            travelCovered: funding.travelCovered,
+            insuranceCovered: funding.insuranceCovered,
+            notes: funding.text.slice(0, 4000)
+          }
+        });
+      }
+
+      if (input.evidence) {
+        await db.insert(scholarshipSnapshots).values({
+          scholarshipId: scholarship.id,
+          sourceUrl: input.evidence.sourceUrl,
+          title: input.evidence.title,
+          snippet: input.evidence.snippet?.slice(0, 8000),
+          evidence: input.evidence.funding ? { funding: input.evidence.funding } : {}
+        });
+      }
       return scholarship.id;
     },
 
@@ -74,7 +118,9 @@ export function createScholarshipRepository(databaseUrl?: string) {
       const rows = await db.select().from(scholarships).where(eq(scholarships.id, id)).limit(1);
       if (!rows[0]) return undefined;
       const sources = await db.select().from(scholarshipSources).where(eq(scholarshipSources.scholarshipId, id));
-      return { ...rows[0], sources };
+      const funding = await db.select().from(scholarshipFunding).where(eq(scholarshipFunding.scholarshipId, id)).limit(1);
+      const snapshots = await db.select().from(scholarshipSnapshots).where(eq(scholarshipSnapshots.scholarshipId, id)).orderBy(desc(scholarshipSnapshots.capturedAt)).limit(10);
+      return { ...rows[0], sources, funding: funding[0], snapshots };
     },
 
     async listScholarships(filters: { fundingClass?: string; degreeLevel?: string; country?: string; minTrustLevel?: number; limit?: number } = {}) {
