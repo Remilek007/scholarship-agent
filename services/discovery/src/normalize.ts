@@ -4,7 +4,12 @@ import type { DiscoveryRecord } from "./index";
 
 export interface NormalizedScholarship extends ScholarshipCandidate {
   canonicalKey: string;
-  evidence: { title: string; snippet?: string; sourceUrl: string };
+  evidence: {
+    title: string;
+    snippet?: string;
+    sourceUrl: string;
+    funding: FundingEvidence;
+  };
 }
 
 const degreePatterns: Array<[RegExp, DegreeLevel]> = [
@@ -27,29 +32,31 @@ export function normalizeDiscoveryRecord(record: DiscoveryRecord): NormalizedSch
   const lower = text.toLowerCase();
   const degreeLevel = detectDegree(text);
   const fields = fieldTerms.filter((term) => lower.includes(term.toLowerCase()));
-  const evidence: FundingEvidence = {
+  const funding: FundingEvidence = {
     text,
-    tuitionCovered: /full tuition|100% tuition|tuition (fee )?waiver|fees fully covered|fees covered in full/i.test(text),
+    tuitionCovered: /full tuition|100% tuition|tuition (fee )?waiver|fees fully covered|fees covered in full|tuition and fees covered/i.test(text),
     stipendMentioned: /stipend|living allowance|maintenance allowance|monthly allowance|living costs covered/i.test(text),
     accommodationCovered: /accommodation|housing|residential costs/i.test(text),
     travelCovered: /travel (grant|allowance|costs)|flight|airfare|relocation/i.test(text),
     insuranceCovered: /health insurance|medical insurance/i.test(text)
   };
-  const fundingClass: FundingClass = classifyFunding(evidence);
+  const fundingClass: FundingClass = classifyFunding(funding);
   const deadline = detectDeadline(text);
   const applicationUrl = detectApplicationUrl(snippet, record.url);
+  const sourceUrl = resolveUrl(record.url, record.url);
+  const provider = inferProvider(record.url, record.source);
 
   return {
     title,
-    provider: inferProvider(record.source, record.url),
+    provider,
     degreeLevel,
     fields,
-    sourceUrl: record.url,
+    sourceUrl,
     applicationUrl,
     fundingClass,
     deadline,
-    canonicalKey: canonicalKey(title, record.source),
-    evidence: { title, snippet, sourceUrl: record.url }
+    canonicalKey: canonicalKey(title, provider),
+    evidence: { title, snippet, sourceUrl, funding }
   };
 }
 
@@ -85,11 +92,15 @@ function detectApplicationUrl(snippet: string | undefined, sourceUrl: string): s
   if (!snippet) return undefined;
   const match = snippet.match(/(?:apply|application|admission)[^:]{0,80}:\s*(https?:\/\/[^\s|]+)/i);
   if (!match) return undefined;
-  try { return new URL(match[1], sourceUrl).toString(); } catch { return undefined; }
+  return resolveUrl(match[1], sourceUrl);
 }
 
-function inferProvider(source: string, url: string): string | undefined {
-  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return source || undefined; }
+function inferProvider(url: string, fallback: string): string | undefined {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return fallback || undefined; }
+}
+
+function resolveUrl(input: string, base: string): string {
+  try { return new URL(input, base).toString(); } catch { return input.trim(); }
 }
 
 function canonicalKey(title: string, provider?: string): string {
