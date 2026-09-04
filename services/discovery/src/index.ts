@@ -33,10 +33,8 @@ export class DiscoveryEngine {
     return deduplicateRecords(records);
   }
 
-  async searchAndPersist(profile: ApplicantProfile) {
-    const records = await this.search(profile);
-    const persistence = await persistDiscoveryRecords(records);
-    return { records, persistence };
+  async persist(records: DiscoveryRecord[]) {
+    return persistDiscoveryRecords(records);
   }
 }
 
