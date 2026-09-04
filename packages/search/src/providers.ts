@@ -65,7 +65,13 @@ function textFromTag(block: string, tag: string): string | undefined {
 }
 
 function decodeXml(value: string): string {
-  return value.replace(/<![CDATA[([\s\S]*?)]]>/g, "$1").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 }
 
 function clean(value: string): string {
