@@ -2,6 +2,7 @@ import { boolean, integer, jsonb, pgTable, real, text, timestamp, uuid } from "d
 
 export const scholarships = pgTable("scholarships", {
   id: uuid("id").defaultRandom().primaryKey(),
+  canonicalKey: text("canonical_key").notNull().unique(),
   title: text("title").notNull(),
   provider: text("provider"),
   university: text("university"),
