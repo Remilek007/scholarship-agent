@@ -11,10 +11,17 @@ export interface ScholarshipEligibilityEvidence {
   text?: string;
 }
 
+export interface ScholarshipRequirementEvidence {
+  name: string;
+  required: boolean;
+  sourceInstruction?: string;
+}
+
 export interface ScholarshipPersistenceInput {
   canonicalKey: string; title: string; provider?: string; university?: string; country?: string; degreeLevel?: string; opportunityType?: string; fields: string[];
   sourceUrl: string; applicationUrl?: string; fundingClass: string; deadline?: string; eligibility?: ScholarshipEligibilityEvidence;
-  evidence?: { title: string; snippet?: string; sourceUrl: string; funding?: { tuitionCovered?: boolean; stipendMentioned?: boolean; accommodationCovered?: boolean; travelCovered?: boolean; insuranceCovered?: boolean; text: string }; eligibility?: ScholarshipEligibilityEvidence };
+  requirements?: ScholarshipRequirementEvidence[];
+  evidence?: { title: string; snippet?: string; sourceUrl: string; funding?: { tuitionCovered?: boolean; stipendMentioned?: boolean; accommodationCovered?: boolean; travelCovered?: boolean; insuranceCovered?: boolean; text: string }; eligibility?: ScholarshipEligibilityEvidence; requirements?: ScholarshipRequirementEvidence[] };
 }
 
 export interface SourceVerificationInput { sourceUrl: string; finalUrl?: string; status: string; trustLevel: number; officialSource: boolean; title?: string; evidence: string[]; warnings: string[]; checkedAt: string; }
@@ -29,7 +36,7 @@ export function createScholarshipRepository(databaseUrl?: string) {
       await db.insert(scholarshipSources).values({ scholarshipId: scholarship.id, url: input.sourceUrl, sourceType: input.opportunityType ?? "discovery", isOfficial: false, lastVerified: new Date() }).onConflictDoNothing();
       const funding = input.evidence?.funding;
       if (funding) await db.insert(scholarshipFunding).values({ scholarshipId: scholarship.id, tuitionCovered: funding.tuitionCovered, accommodationCovered: funding.accommodationCovered, travelCovered: funding.travelCovered, insuranceCovered: funding.insuranceCovered, notes: funding.text.slice(0, 4000) }).onConflictDoUpdate({ target: scholarshipFunding.scholarshipId, set: { tuitionCovered: funding.tuitionCovered, accommodationCovered: funding.accommodationCovered, travelCovered: funding.travelCovered, insuranceCovered: funding.insuranceCovered, notes: funding.text.slice(0, 4000) } });
-      if (input.evidence) await db.insert(scholarshipSnapshots).values({ scholarshipId: scholarship.id, sourceUrl: input.evidence.sourceUrl, title: input.evidence.title, snippet: input.evidence.snippet?.slice(0, 8000), evidence: { ...(input.evidence.funding ? { funding: input.evidence.funding } : {}), ...(input.evidence.eligibility ? { eligibility: input.evidence.eligibility } : input.eligibility ? { eligibility: input.eligibility } : {}) } });
+      if (input.evidence) await db.insert(scholarshipSnapshots).values({ scholarshipId: scholarship.id, sourceUrl: input.evidence.sourceUrl, title: input.evidence.title, snippet: input.evidence.snippet?.slice(0, 8000), evidence: { ...(input.evidence.funding ? { funding: input.evidence.funding } : {}), ...(input.evidence.eligibility ? { eligibility: input.evidence.eligibility } : input.eligibility ? { eligibility: input.eligibility } : {}), ...(input.evidence.requirements ? { requirements: input.evidence.requirements } : input.requirements ? { requirements: input.requirements } : {}) } });
       return scholarship.id;
     },
     async recordDiscovery(input: { url: string; title?: string; source: string; discoveryMethod: string; query?: string }) { await db.insert(discoveryRecords).values({ url: input.url, title: input.title, source: input.source, discoveryMethod: input.discoveryMethod, query: input.query, status: "processed" }); },
@@ -52,12 +59,28 @@ export function createScholarshipRepository(databaseUrl?: string) {
       for (const row of rows) { if (result.has(row.scholarshipId)) continue; const evidence = row.evidence as { eligibility?: ScholarshipEligibilityEvidence } | null; if (evidence?.eligibility) result.set(row.scholarshipId, evidence.eligibility); }
       return result;
     },
+    async getLatestRequirements(scholarshipId: string): Promise<ScholarshipRequirementEvidence[]> {
+      const rows = await db.select({ evidence: scholarshipSnapshots.evidence }).from(scholarshipSnapshots).where(eq(scholarshipSnapshots.scholarshipId, scholarshipId)).orderBy(desc(scholarshipSnapshots.capturedAt));
+      for (const row of rows) {
+        const evidence = row.evidence as { requirements?: ScholarshipRequirementEvidence[] } | null;
+        if (Array.isArray(evidence?.requirements) && evidence.requirements.length) return evidence.requirements;
+      }
+      return [];
+    },
     async listScholarships(filters: { fundingClass?: string; degreeLevel?: string; country?: string; opportunityType?: string; minTrustLevel?: number; limit?: number } = {}) {
       const conditions = []; if (filters.fundingClass) conditions.push(eq(scholarships.fundingClass, filters.fundingClass)); if (filters.degreeLevel) conditions.push(eq(scholarships.degreeLevel, filters.degreeLevel)); if (filters.country) conditions.push(eq(scholarships.country, filters.country)); if (filters.opportunityType) conditions.push(eq(scholarships.opportunityType, filters.opportunityType)); if (filters.minTrustLevel !== undefined) conditions.push(gte(scholarships.trustLevel, filters.minTrustLevel));
       return db.select().from(scholarships).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(scholarships.updatedAt)).limit(Math.min(Math.max(filters.limit ?? 50, 1), 200));
     },
     async createApplication(scholarshipId: string, aiPolicy = "unknown", notes?: string) {
-      const [application] = await db.insert(applications).values({ scholarshipId, aiPolicy, notes, status: "discovered", updatedAt: new Date() }).onConflictDoUpdate({ target: applications.scholarshipId, set: { aiPolicy, notes, updatedAt: new Date() } }).returning(); if (!application) throw new Error("Application creation failed"); return this.getApplication(application.id);
+      const [application] = await db.insert(applications).values({ scholarshipId, aiPolicy, notes, status: "discovered", updatedAt: new Date() }).onConflictDoUpdate({ target: applications.scholarshipId, set: { aiPolicy, notes, updatedAt: new Date() } }).returning();
+      if (!application) throw new Error("Application creation failed");
+      const requirements = await this.getLatestRequirements(scholarshipId);
+      if (requirements.length) {
+        await db.delete(applicationRequirements).where(eq(applicationRequirements.applicationId, application.id));
+        await db.insert(applicationRequirements).values(requirements.map((item) => ({ applicationId: application.id, name: item.name, required: item.required, status: "missing", sourceInstruction: item.sourceInstruction })));
+      }
+      await db.insert(applicationEvents).values({ applicationId: application.id, eventType: "created", details: { requirementsHydrated: requirements.length } });
+      return this.getApplication(application.id);
     },
     async getApplication(id: string) {
       const [application] = await db.select().from(applications).where(eq(applications.id, id)).limit(1); if (!application) return undefined;
