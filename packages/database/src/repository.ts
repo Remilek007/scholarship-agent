@@ -90,6 +90,13 @@ export function createScholarshipRepository(databaseUrl?: string) {
     async listApplications(limit = 50) { return db.select().from(applications).orderBy(desc(applications.updatedAt)).limit(Math.min(Math.max(limit, 1), 200)); },
     async updateApplication(id: string, input: { status?: string; aiPolicy?: string; notes?: string }) { const [application] = await db.update(applications).set({ ...input, updatedAt: new Date() }).where(eq(applications.id, id)).returning(); return application ? this.getApplication(application.id) : undefined; },
     async replaceRequirements(applicationId: string, requirements: ApplicationRequirementInput[]) { await db.delete(applicationRequirements).where(eq(applicationRequirements.applicationId, applicationId)); if (requirements.length) await db.insert(applicationRequirements).values(requirements.map((item) => ({ applicationId, name: item.name, required: item.required ?? true, status: item.status ?? "missing", sourceInstruction: item.sourceInstruction }))); return this.getApplication(applicationId); },
+    async updateRequirementStatus(requirementId: string, status: "missing" | "ready" | "attached" | "waived") {
+      const [requirement] = await db.update(applicationRequirements).set({ status }).where(eq(applicationRequirements.id, requirementId)).returning();
+      if (!requirement) return undefined;
+      await db.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, requirement.applicationId));
+      await db.insert(applicationEvents).values({ applicationId: requirement.applicationId, eventType: "document_attached", details: { requirementId, status } });
+      return this.getApplication(requirement.applicationId);
+    },
     async upsertAnswer(applicationId: string, field: string, answer: string, aiPolicy = "unknown", reviewed = false) { const [saved] = await db.insert(applicationAnswers).values({ applicationId, field, answer, aiPolicy, reviewed, updatedAt: new Date() }).onConflictDoUpdate({ target: [applicationAnswers.applicationId, applicationAnswers.field], set: { answer, aiPolicy, reviewed, updatedAt: new Date() } }).returning(); return saved; },
     async recordApplicationEvent(applicationId: string, eventType: string, details: Record<string, unknown> = {}) { const [event] = await db.insert(applicationEvents).values({ applicationId, eventType, details }).returning(); await db.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, applicationId)); return event; }
   };
