@@ -72,7 +72,7 @@ app.post("/api/matches/top", async (req, res) => {
   try {
     const profile = req.body.profile as ApplicantProfile;
     const limit = typeof req.body.limit === "number" ? Math.min(Math.max(Math.floor(req.body.limit), 1), 20) : 10;
-    const rows = await repository.listScholarships({ fundingClass: undefined, degreeLevel: "masters", limit: 200 });
+    const rows = await repository.listScholarships({ degreeLevel: "masters", limit: 200 });
     const candidates: ScholarshipCandidate[] = rows.map((row) => ({
       title: row.title,
       provider: row.provider ?? undefined,
@@ -86,7 +86,7 @@ app.post("/api/matches/top", async (req, res) => {
       fundingClass: isFundingClass(row.fundingClass) ? row.fundingClass : "unknown",
       deadline: row.deadline ? row.deadline.toISOString() : undefined
     }));
-    const ranked = rankCandidates(profile, candidates).filter((candidate) => candidate.eligibilityGate !== "fail").slice(0, limit);
+    const ranked = rankCandidates(profile, candidates).filter((candidate) => candidate.eligibilityGate === "pass").slice(0, limit);
     res.json({ profile, count: ranked.length, matches: ranked });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Unable to rank scholarship matches" });
