@@ -37,7 +37,7 @@ export async function deepExtractPage(sourceUrl: string): Promise<DeepExtraction
     finalUrl,
     title: extractTitle(html),
     text,
-    applicationUrl: findApplicationUrl(links, finalUrl),
+    applicationUrl: findApplicationUrl(links),
     deadline: extractDeadline(text),
     fundingEvidence: evidence(text, /fully funded|fully-funded|full funding|tuition|stipend|living allowance|accommodation|studentship|assistantship|funded research/gi),
     eligibilityEvidence: evidence(text, /international students|eligible nationalit|citizenship|Nigerian|Nigeria|eligib|residency|minimum GPA|minimum grade|academic requirement/gi),
@@ -73,10 +73,9 @@ function extractLinks(html: string, baseUrl: string): Array<{ label: string; url
   return results;
 }
 
-function findApplicationUrl(links: Array<{ label: string; url: string }>, baseUrl: string): string | undefined {
+function findApplicationUrl(links: Array<{ label: string; url: string }>): string | undefined {
   return links.find((link) => /apply now|apply|application portal|online application|admission portal/i.test(link.label))?.url
-    ?? links.find((link) => /apply|application|admission/i.test(link.url))?.url
-    ?? baseUrl;
+    ?? links.find((link) => /apply|application|admission/i.test(link.url))?.url;
 }
 
 function extractDeadline(text: string): string | undefined {
