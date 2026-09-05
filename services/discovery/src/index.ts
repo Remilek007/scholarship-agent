@@ -48,3 +48,5 @@ export { normalizeDiscoveryRecord, normalizeDiscoveryRecords } from "./normalize
 export type { NormalizedScholarship } from "./normalize";
 export { verifySource } from "./verification";
 export type { VerificationResult, VerificationStatus } from "./verification";
+export { extractApplicationRequirements } from "./requirements";
+export type { ExtractedRequirement } from "./requirements";
