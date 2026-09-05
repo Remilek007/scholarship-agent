@@ -14,9 +14,7 @@ The search taxonomy prioritizes Forestry, Forest Science, Forest Management, Sil
 
 ## Discovery
 
-Discovery can combine configured direct pages and RSS feeds with provider APIs. Tavily has a free tier with 1,000 API credits per month and no credit card requirement according to its current documentation. citeturn2search2turn2search5 Brave Search is also supported as an optional provider; its API requires an API key and should be treated as an optional provider rather than a guaranteed free service. citeturn1search0turn1search2
-
-Configured providers are enabled only when their environment variables are present, so the core pipeline does not require a paid provider.
+Discovery can combine configured direct pages and RSS feeds with optional web-search providers. Tavily is supported as a free-tier provider; Brave Search is supported as an optional API provider. Providers are enabled only when their environment variables are present, so the core pipeline does not require a paid provider.
 
 ## Verification and ranking
 
