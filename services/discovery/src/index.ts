@@ -50,3 +50,5 @@ export { verifySource } from "./verification";
 export type { VerificationResult, VerificationStatus } from "./verification";
 export { extractApplicationRequirements } from "./requirements";
 export type { ExtractedRequirement } from "./requirements";
+export { SOURCE_REGISTRY, getEnabledSourceRegistry, getSourceRegistryUrls } from "./source-registry";
+export type { DiscoverySourceDefinition } from "./source-registry";
