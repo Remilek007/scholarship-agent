@@ -9,6 +9,14 @@ const discoveryIntents = [
   "funded MSc wildlife conservation", "research assistantship forest management", "funded thesis forestry"
 ];
 
+// High-value authoritative starting points. Search engines can use these as
+// site restrictions; the resulting pages are still verified independently.
+const authoritativeDomains = [
+  "daad.de", "chevening.org", "cscuk.fcdo.gov.uk", "fulbrightonline.org", "australiaawards.gov.au",
+  "studyinjapan.go.jp", "studyinsweden.se", "studyinfinland.fi", "nuffic.nl", "erasmus-plus.ec.europa.eu",
+  "euraxess.ec.europa.eu", "fao.org", "iucn.org", "unep.org", "unesco.org", "cifor-icraf.org"
+];
+
 export function buildDiscoveryQueries(profile: ApplicantProfile): string[] {
   const degree = profile.degreeLevel === "masters" ? "master's MSc" : profile.degreeLevel;
   const nationality = profile.nationality;
@@ -26,11 +34,17 @@ export function buildDiscoveryQueries(profile: ApplicantProfile): string[] {
     queries.add(`"${field}" funded research project master's supervisor`);
     queries.add(`"${field}" MSc scholarship university department funding`);
     queries.add(`"${field}" funded graduate position professor lab`);
+
+    for (const domain of authoritativeDomains) {
+      queries.add(`site:${domain} "${field}" "funded" ${degree}`);
+      queries.add(`site:${domain} "${field}" scholarship "international students"`);
+    }
   }
   return [...queries];
 }
 
 export function getForestryTerms(): string[] { return [...fields]; }
+export function getAuthoritativeSearchDomains(): string[] { return [...authoritativeDomains]; }
 export { classifyFunding, isFundedEnough } from "./funding";
 export type { FundingEvidence } from "./funding";
 export { assessEligibility, extractEligibilityEvidence } from "./eligibility";
