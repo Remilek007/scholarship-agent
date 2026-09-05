@@ -46,18 +46,30 @@ footer { margin-top:auto; padding-top:15px; border-top:1px solid #edf0ed; font-s
 .readiness small { display:block; color:#69736c; margin-top:8px; }
 .workspace-grid { display:grid; grid-template-columns:1fr 1.4fr; gap:26px; padding-top:22px; }
 .workspace-grid h3 { margin:0 0 10px; }
+.workspace-grid > div > select { margin-bottom:12px; }
+.primary { background:#183d2b; color:#fff; margin:8px 0 20px; }
 .requirement-group { margin-bottom:18px; }
 .requirement-group h4 { margin:0 0 7px; font-size:13px; color:#536058; text-transform:uppercase; letter-spacing:.06em; }
 .requirements { list-style:none; padding:0; margin:0; }
 .requirements li { background:#fff; border:1px solid #e2e8e1; border-radius:12px; padding:13px; margin-bottom:8px; display:grid; grid-template-columns:1fr auto; gap:5px 12px; }
 .requirements li > div { display:flex; flex-direction:column; gap:4px; }
 .requirements span { color:#69736c; font-size:12px; }
+.requirements select { font-size:12px; padding:6px 8px; }
 .requirements em { font-style:normal; font-size:11px; font-weight:800; align-self:start; }
 .requirements small { grid-column:1/-1; color:#69736c; line-height:1.4; }
 .req-missing { color:#9a4c20; }
 .req-ready,.req-attached { color:#17643b; }
 .req-waived { color:#6b5a22; }
 .answer { background:#fff; border:1px solid #e2e8e1; border-radius:12px; padding:14px; margin-bottom:10px; }
-.answer p { line-height:1.55; white-space:pre-wrap; }
-.answer small { color:#69736c; }
+.answer textarea { min-height:80px; margin-top:8px; }
+.answer-meta { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+.answer-meta small { color:#69736c; }
+.answer-meta button { background:#e9eee9; padding:8px 11px; }
+.question-bank { margin:20px 0; padding:16px; background:#eef5ef; border:1px solid #d7e5d9; border-radius:14px; }
+.question-bank h3 { margin-top:0; }
+.question-bank article { padding:12px 0; border-bottom:1px solid #d7e5d9; }
+.question-bank article:last-of-type { border-bottom:0; }
+.question-bank p { margin:5px 0; line-height:1.45; }
+.question-bank small { color:#617067; }
+.warning-list { display:grid; gap:5px; margin-top:14px; color:#6b5a22; }
 @media (max-width:760px) { .hero { display:block; } button { margin-top:22px; } .stats,.grid,.workspace-grid { grid-template-columns:1fr; } .toolbar,footer { display:block; } .actions { justify-content:flex-start; margin-top:10px; } .workspace { padding:20px; } }
