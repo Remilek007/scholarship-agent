@@ -4,6 +4,7 @@ import { createScholarshipRepository } from "@scholarship-agent/database";
 import { buildDiscoveryQueries, scoreCandidate } from "@scholarship-agent/search";
 import type { ApplicantProfile, ScholarshipCandidate, OpportunityType } from "@scholarship-agent/shared";
 import { createDiscoveryEngine, verifySource } from "@scholarship-agent/discovery";
+import { getEnabledSourceRegistry } from "@scholarship-agent/discovery/source-registry";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -21,6 +22,10 @@ app.get("/api/discovery/health", async (_req, res) => {
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Discovery health check failed" });
   }
+});
+
+app.get("/api/discovery/sources", (_req, res) => {
+  res.json(getEnabledSourceRegistry());
 });
 
 app.post("/api/discovery/plan", (req, res) => {
