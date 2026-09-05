@@ -28,6 +28,12 @@ export interface ScholarshipEligibilityEvidence {
   text?: string;
 }
 
+export interface ScholarshipRequirement {
+  name: string;
+  required: boolean;
+  sourceInstruction?: string;
+}
+
 export interface ScholarshipCandidate {
   title: string;
   provider?: string;
@@ -41,6 +47,7 @@ export interface ScholarshipCandidate {
   fundingClass: FundingClass;
   deadline?: string;
   eligibility?: ScholarshipEligibilityEvidence;
+  requirements?: ScholarshipRequirement[];
 }
 
 export interface MatchResult {
