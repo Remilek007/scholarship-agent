@@ -1,6 +1,7 @@
 import { buildDiscoveryQueries } from "@scholarship-agent/search";
 import type { ApplicantProfile } from "@scholarship-agent/shared";
-import { persistDiscoveryRecords } from "./persistence";
+import { persistDiscoveryRecords, persistEnrichedDiscoveryRecords } from "./persistence";
+import { enrichDiscoveryRecords } from "./enrich";
 
 export interface DiscoveryRecord {
   url: string;
@@ -28,7 +29,23 @@ export class DiscoveryEngine {
     }
     return deduplicateRecords(records);
   }
-  async searchAndPersist(profile: ApplicantProfile) { const records = await this.search(profile); const persistence = await persistDiscoveryRecords(records); return { records, persistence }; }
+  async searchAndPersist(profile: ApplicantProfile, options: { deepEnrich?: boolean; limit?: number } = {}) {
+    const records = await this.search(profile);
+    if (options.deepEnrich === false) {
+      const persistence = await persistDiscoveryRecords(records);
+      return { records, persistence, enriched: 0, verified: 0 };
+    }
+
+    const enriched = await enrichDiscoveryRecords(profile, records, options.limit);
+    const persistence = await persistEnrichedDiscoveryRecords(enriched);
+    return {
+      records,
+      enriched: enriched.map((item) => item.candidate),
+      enrichmentErrors: enriched.filter((item) => item.enrichmentError).map((item) => ({ url: item.record.url, error: item.enrichmentError })),
+      persistence,
+      verified: persistence.verified
+    };
+  }
   async persist(records: DiscoveryRecord[]) { return persistDiscoveryRecords(records); }
   async health() { return Promise.all(this.sources.map(async (source) => ({ name: source.name, healthy: await source.healthCheck() }))); }
 }
@@ -52,5 +69,7 @@ export { extractApplicationRequirements } from "./requirements";
 export type { ExtractedRequirement } from "./requirements";
 export { deepExtractPage } from "./deep-extract";
 export type { DeepExtractionResult } from "./deep-extract";
+export { enrichDiscoveryRecords } from "./enrich";
+export type { EnrichedDiscoveryRecord } from "./enrich";
 export { SOURCE_REGISTRY, getEnabledSourceRegistry, getSourceRegistryUrls } from "./source-registry";
 export type { DiscoverySourceDefinition } from "./source-registry";
