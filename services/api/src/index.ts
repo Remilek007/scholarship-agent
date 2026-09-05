@@ -1,7 +1,7 @@
 import cors from "cors";
 import express from "express";
 import { createScholarshipRepository } from "@scholarship-agent/database";
-import { buildDiscoveryQueries, rankCandidates, scoreCandidate } from "@scholarship-agent/search";
+import { buildDiscoveryQueries, prepareApplicationIntelligence, rankCandidates, scoreCandidate } from "@scholarship-agent/search";
 import type { ApplicantProfile, ScholarshipCandidate, OpportunityType } from "@scholarship-agent/shared";
 import { createDiscoveryEngine, getEnabledSourceRegistry, verifySource } from "@scholarship-agent/discovery";
 
@@ -165,6 +165,19 @@ app.put("/api/applications/:id/requirements", async (req, res) => {
   res.json(await repository.replaceRequirements(req.params.id, requirements));
 });
 
+app.patch("/api/applications/:id/requirements/:requirementId", async (req, res) => {
+  if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
+  const status = parseRequirementStatus(req.body.status);
+  if (!status) return res.status(400).json({ error: "status must be missing, ready, attached, or waived" });
+  const application = await repository.getApplication(req.params.id);
+  if (!application) return res.status(404).json({ error: "Application not found" });
+  const requirement = application.requirements.find((item: { id: string }) => item.id === req.params.requirementId);
+  if (!requirement) return res.status(404).json({ error: "Requirement not found" });
+  const updated = await repository.updateRequirementStatus(req.params.requirementId, status);
+  if (!updated) return res.status(404).json({ error: "Requirement not found" });
+  res.json(updated);
+});
+
 app.put("/api/applications/:id/answers", async (req, res) => {
   if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
   const field = typeof req.body.field === "string" ? req.body.field.trim() : "";
@@ -184,13 +197,27 @@ app.post("/api/applications/:id/prepare", async (req, res) => {
   if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
   const application = await repository.getApplication(req.params.id);
   if (!application) return res.status(404).json({ error: "Application not found" });
-  await repository.recordApplicationEvent(req.params.id, "preparation_started", { userRequested: true });
-  res.json({ application, nextStep: "review_requirements", finalSubmissionRequiresUserApproval: true });
+  const profile = req.body.profile as ApplicantProfile | undefined;
+  if (!profile?.nationality || !profile.degreeLevel || !Array.isArray(profile.targetFields)) {
+    return res.status(400).json({ error: "A complete applicant profile is required for preparation" });
+  }
+  const preparation = prepareApplicationIntelligence(profile);
+  for (const draft of preparation.factualAnswers) {
+    await repository.upsertAnswer(req.params.id, draft.field, draft.answer, draft.aiPolicy, draft.reviewed);
+  }
+  await repository.updateApplication(req.params.id, { status: "preparing" });
+  await repository.recordApplicationEvent(req.params.id, "preparation_started", { userRequested: true, factualAnswersPrepared: preparation.factualAnswers.length, questions: preparation.questions.length });
+  const updated = await repository.getApplication(req.params.id);
+  res.json({ application: updated, preparation, finalSubmissionRequiresUserApproval: true });
 });
 
 function parseAiPolicy(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
-  return ["unknown", "allowed", "restricted", "prohibited"].includes(value) ? value : undefined;
+  return ["unknown", "allowed", "limited", "restricted", "prohibited"].includes(value) ? value : undefined;
+}
+
+function parseRequirementStatus(value: unknown): "missing" | "ready" | "attached" | "waived" | undefined {
+  return value === "missing" || value === "ready" || value === "attached" || value === "waived" ? value : undefined;
 }
 
 function isOpportunityType(value: string | null | undefined): value is OpportunityType {
