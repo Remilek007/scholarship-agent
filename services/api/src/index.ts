@@ -1,7 +1,7 @@
 import cors from "cors";
 import express from "express";
 import { createScholarshipRepository } from "@scholarship-agent/database";
-import { createDiscoveryEngine, normalizeDiscoveryRecords, verifySource } from "@scholarship-agent/discovery";
+import { createDiscoveryEngine, extractApplicationRequirements, normalizeDiscoveryRecords, verifySource } from "@scholarship-agent/discovery";
 import { applicantProfileSchema } from "@scholarship-agent/schemas";
 import { buildDiscoveryQueries, scoreCandidate } from "@scholarship-agent/search";
 import type { OpportunityType, ScholarshipCandidate } from "@scholarship-agent/shared";
@@ -79,32 +79,35 @@ app.post("/api/matches", async (req, res) => {
     const scored = rows.map((row) => {
       const candidate: ScholarshipCandidate = {
         title: row.title, provider: row.provider ?? undefined, university: row.university ?? undefined,
-        country: row.country ?? undefined, degreeLevel: isDegreeLevel(row.degreeLevel) ? row.degreeLevel : undefined,
-        opportunityType: isOpportunityType(row.opportunityType) ? row.opportunityType : "other",
-        fields: Array.isArray(row.fields) ? row.fields : [], sourceUrl: row.sourceUrl,
-        applicationUrl: row.applicationUrl ?? undefined, fundingClass: isFundingClass(row.fundingClass) ? row.fundingClass : "unknown",
+        country: row.country ?? undefined, degreeLevel: row.degreeLevel as ScholarshipCandidate["degreeLevel"],
+        opportunityType: row.opportunityType as OpportunityType, fields: row.fields, sourceUrl: row.sourceUrl,
+        applicationUrl: row.applicationUrl ?? undefined, fundingClass: row.fundingClass as ScholarshipCandidate["fundingClass"],
         deadline: row.deadline?.toISOString(), eligibility: evidenceById.get(row.id)
       };
-      const match = scoreCandidate(parsed.data, candidate);
-      return { ...candidate, id: row.id, trustLevel: row.trustLevel, score: Math.round(match.overallScore * 100), ...match };
-    }).filter((item) => item.eligibility !== "not_eligible" && (includeReview || item.eligibility !== "cannot_determine"))
-      .sort((a, b) => b.score - a.score).slice(0, limit);
-    return res.json({ mode: "apply", count: scored.length, profile: parsed.data, matches: scored });
-  } catch (error) { return res.status(500).json({ error: "Match calculation failed", details: error instanceof Error ? error.message : "Unknown error" }); }
+      return { ...row, match: scoreCandidate(parsed.data, candidate) };
+    }).filter((item) => item.match.eligibility !== "not_eligible").sort((a, b) => b.match.overallScore - a.match.overallScore).slice(0, limit);
+    return res.json({ matches: scored.map((item) => includeReview ? item : { ...item, match: { ...item.match, reasons: undefined } }) });
+  } catch (error) { return res.status(500).json({ error: "Matching failed", details: error instanceof Error ? error.message : "Unknown error" }); }
 });
 
 app.get("/api/scholarships", async (req, res) => {
   if (!process.env.DATABASE_URL) return res.status(503).json({ error: "DATABASE_URL is not configured" });
   try {
     const repository = createScholarshipRepository();
-    const minTrustLevel = req.query.minTrustLevel ? Number(req.query.minTrustLevel) : undefined;
-    const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    if (minTrustLevel !== undefined && (!Number.isInteger(minTrustLevel) || minTrustLevel < 1 || minTrustLevel > 5)) return res.status(400).json({ error: "minTrustLevel must be an integer from 1 to 5" });
+    const minTrustLevel = parseTrustLevel(req.query.minTrustLevel, 1);
+    if (minTrustLevel === null) return res.status(400).json({ error: "minTrustLevel must be an integer from 1 to 5" });
     const opportunityType = parseOpportunityType(req.query.opportunityType);
     if (req.query.opportunityType && !opportunityType) return res.status(400).json({ error: "Invalid opportunityType" });
-    const scholarships = await repository.listScholarships({ fundingClass: typeof req.query.fundingClass === "string" ? req.query.fundingClass : undefined, degreeLevel: typeof req.query.degreeLevel === "string" ? req.query.degreeLevel : undefined, country: typeof req.query.country === "string" ? req.query.country : undefined, opportunityType, minTrustLevel, limit });
-    return res.json({ count: scholarships.length, scholarships });
-  } catch (error) { return res.status(500).json({ error: "Failed to load scholarships", details: error instanceof Error ? error.message : "Unknown error" }); }
+    const scholarships = await repository.listScholarships({
+      fundingClass: typeof req.query.fundingClass === "string" ? req.query.fundingClass : undefined,
+      degreeLevel: typeof req.query.degreeLevel === "string" ? req.query.degreeLevel : undefined,
+      country: typeof req.query.country === "string" ? req.query.country : undefined,
+      opportunityType,
+      minTrustLevel,
+      limit: parseLimit(req.query.limit, 50, 200)
+    });
+    return res.json({ scholarships });
+  } catch (error) { return res.status(500).json({ error: "Scholarship listing failed", details: error instanceof Error ? error.message : "Unknown error" }); }
 });
 
 app.get("/api/scholarships/:id", async (req, res) => {
@@ -114,15 +117,21 @@ app.get("/api/scholarships/:id", async (req, res) => {
     const scholarship = await repository.getScholarship(req.params.id);
     if (!scholarship) return res.status(404).json({ error: "Scholarship not found" });
     return res.json({ scholarship });
-  } catch (error) { return res.status(500).json({ error: "Failed to load scholarship", details: error instanceof Error ? error.message : "Unknown error" }); }
+  } catch (error) { return res.status(500).json({ error: "Scholarship load failed", details: error instanceof Error ? error.message : "Unknown error" }); }
+});
+
+app.get("/api/applications", async (_req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "DATABASE_URL is not configured" });
+  try { return res.json({ applications: await createScholarshipRepository().listApplications() }); }
+  catch (error) { return res.status(500).json({ error: "Application listing failed", details: error instanceof Error ? error.message : "Unknown error" }); }
 });
 
 app.post("/api/applications", async (req, res) => {
   if (!process.env.DATABASE_URL) return res.status(503).json({ error: "DATABASE_URL is not configured" });
   const scholarshipId = typeof req.body?.scholarshipId === "string" ? req.body.scholarshipId : "";
+  const aiPolicy = parseAiPolicy(req.body?.aiPolicy ?? "unknown");
   if (!scholarshipId) return res.status(400).json({ error: "scholarshipId is required" });
-  const aiPolicy = parseAiPolicy(req.body?.aiPolicy);
-  if (!aiPolicy) return res.status(400).json({ error: "aiPolicy must be unknown, allowed, restricted, or prohibited" });
+  if (!aiPolicy) return res.status(400).json({ error: "Invalid aiPolicy" });
   try {
     const repository = createScholarshipRepository();
     if (!(await repository.getScholarship(scholarshipId))) return res.status(404).json({ error: "Scholarship not found" });
@@ -131,23 +140,32 @@ app.post("/api/applications", async (req, res) => {
   } catch (error) { return res.status(500).json({ error: "Application creation failed", details: error instanceof Error ? error.message : "Unknown error" }); }
 });
 
-app.get("/api/applications", async (req, res) => {
+app.get("/api/applications/:id", async (req, res) => {
   if (!process.env.DATABASE_URL) return res.status(503).json({ error: "DATABASE_URL is not configured" });
   try {
-    const repository = createScholarshipRepository();
-    const applications = await repository.listApplications(typeof req.query.limit === "string" ? Number(req.query.limit) : 50);
-    return res.json({ count: applications.length, applications });
-  } catch (error) { return res.status(500).json({ error: "Failed to load applications", details: error instanceof Error ? error.message : "Unknown error" }); }
+    const application = await createScholarshipRepository().getApplication(req.params.id);
+    if (!application) return res.status(404).json({ error: "Application not found" });
+    return res.json({ application });
+  } catch (error) { return res.status(500).json({ error: "Application load failed", details: error instanceof Error ? error.message : "Unknown error" }); }
 });
 
-app.get("/api/applications/:id", async (req, res) => {
+app.post("/api/applications/:id/prepare", async (req, res) => {
   if (!process.env.DATABASE_URL) return res.status(503).json({ error: "DATABASE_URL is not configured" });
   try {
     const repository = createScholarshipRepository();
     const application = await repository.getApplication(req.params.id);
     if (!application) return res.status(404).json({ error: "Application not found" });
-    return res.json({ application });
-  } catch (error) { return res.status(500).json({ error: "Failed to load application", details: error instanceof Error ? error.message : "Unknown error" }); }
+    const scholarship = await repository.getScholarship(application.scholarshipId);
+    if (!scholarship) return res.status(404).json({ error: "Scholarship not found" });
+    const sourceUrl = scholarship.applicationUrl ?? scholarship.sourceUrl;
+    const response = await fetch(sourceUrl, { headers: { "user-agent": "ScholarshipAgent/0.1 (+application-preparation)" }, redirect: "follow", signal: AbortSignal.timeout(15_000) });
+    if (!response.ok) return res.status(502).json({ error: "Application source could not be fetched", status: response.status, sourceUrl });
+    const html = await response.text();
+    const requirements = extractApplicationRequirements(html);
+    const prepared = await repository.replaceRequirements(req.params.id, requirements);
+    await repository.recordApplicationEvent(req.params.id, "requirements_extracted", { sourceUrl: response.url || sourceUrl, count: requirements.length });
+    return res.json({ application: prepared, sourceUrl: response.url || sourceUrl, requirementCount: requirements.length });
+  } catch (error) { return res.status(500).json({ error: "Application preparation failed", details: error instanceof Error ? error.message : "Unknown error" }); }
 });
 
 app.patch("/api/applications/:id", async (req, res) => {
