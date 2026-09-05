@@ -3,6 +3,8 @@ export interface DiscoveryConfig {
   rssFeeds: string[];
   searchEndpoint?: string;
   searchApiKey?: string;
+  braveSearchApiKey?: string;
+  tavilyApiKey?: string;
 }
 
 function list(value?: string): string[] {
@@ -14,6 +16,8 @@ export function loadDiscoveryConfig(env: NodeJS.ProcessEnv = process.env): Disco
     directUrls: list(env.DISCOVERY_DIRECT_URLS),
     rssFeeds: list(env.DISCOVERY_RSS_FEEDS),
     searchEndpoint: env.DISCOVERY_SEARCH_ENDPOINT?.trim() || undefined,
-    searchApiKey: env.DISCOVERY_SEARCH_API_KEY?.trim() || undefined
+    searchApiKey: env.DISCOVERY_SEARCH_API_KEY?.trim() || undefined,
+    braveSearchApiKey: env.BRAVE_SEARCH_API_KEY?.trim() || undefined,
+    tavilyApiKey: env.TAVILY_API_KEY?.trim() || undefined
   };
 }
