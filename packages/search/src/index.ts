@@ -9,8 +9,6 @@ const discoveryIntents = [
   "funded MSc wildlife conservation", "research assistantship forest management", "funded thesis forestry"
 ];
 
-// High-value authoritative starting points. Search engines can use these as
-// site restrictions; the resulting pages are still verified independently.
 const authoritativeDomains = [
   "daad.de", "chevening.org", "cscuk.fcdo.gov.uk", "fulbrightonline.org", "australiaawards.gov.au",
   "studyinjapan.go.jp", "studyinsweden.se", "studyinfinland.fi", "nuffic.nl", "erasmus-plus.ec.europa.eu",
@@ -34,7 +32,6 @@ export function buildDiscoveryQueries(profile: ApplicantProfile): string[] {
     queries.add(`"${field}" funded research project master's supervisor`);
     queries.add(`"${field}" MSc scholarship university department funding`);
     queries.add(`"${field}" funded graduate position professor lab`);
-
     for (const domain of authoritativeDomains) {
       queries.add(`site:${domain} "${field}" "funded" ${degree}`);
       queries.add(`site:${domain} "${field}" scholarship "international students"`);
@@ -51,6 +48,8 @@ export { assessEligibility, extractEligibilityEvidence } from "./eligibility";
 export { scoreCandidate } from "./matching";
 export { rankCandidates } from "./ranking";
 export { scoreFieldRelevance } from "./relevance";
+export { prepareApplicationIntelligence } from "./application";
+export type { ApplicationAnswerDraft, ApplicationPreparation, ApplicationQuestion } from "./application";
 export type { SearchProvider, SearchResult } from "./sources";
 export { uniqueSearchResults } from "./sources";
 export { PublicSearchProvider, RssSearchProvider } from "./providers";
