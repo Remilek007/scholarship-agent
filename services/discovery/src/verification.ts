@@ -13,21 +13,21 @@ export interface VerificationResult {
 }
 
 const officialPatterns = [
-  /(^|\\.)gov\\.[a-z]{2,}$/i,
-  /(^|\\.)gov\\.[a-z]{2}\\.[a-z]{2}$/i,
-  /(^|\\.)edu$/i,
-  /(^|\\.)edu\\.[a-z]{2,}$/i,
-  /(^|\\.)ac\\.[a-z]{2,}$/i,
-  /(^|\\.)ac\\.[a-z]{2}\\.[a-z]{2}$/i
+  /(^|\.)gov\.[a-z]{2,}$/i,
+  /(^|\.)gov\.[a-z]{2}\.[a-z]{2}$/i,
+  /(^|\.)edu$/i,
+  /(^|\.)edu\.[a-z]{2,}$/i,
+  /(^|\.)ac\.[a-z]{2,}$/i,
+  /(^|\.)ac\.[a-z]{2}\.[a-z]{2}$/i
 ];
 
 const suspiciousPatterns = [
-  /pay\\s+(?:a\\s+)?fee\\s+to\\s+(?:unlock|release|secure)/i,
-  /guaranteed\\s+scholarship/i,
-  /send\\s+(?:money|payment|crypto)\\s+to/i,
+  /pay\s+(?:a\s+)?fee\s+to\s+(?:unlock|release|secure)/i,
+  /guaranteed\s+scholarship/i,
+  /send\s+(?:money|payment|crypto)\s+to/i,
   /whatsapp[- ]only/i,
-  /personal\\s+(?:bank|account)/i,
-  /pay\\s+to\\s+apply/i
+  /personal\s+(?:bank|account)/i,
+  /pay\s+to\s+apply/i
 ];
 
 export async function verifySource(sourceUrl: string): Promise<VerificationResult> {
@@ -50,26 +50,12 @@ export async function verifySource(sourceUrl: string): Promise<VerificationResul
     const officialSource = isOfficialDomain(final.hostname);
 
     if (!response.ok) {
-      return {
-        status: "unverified",
-        trustLevel: officialSource ? 3 : 1,
-        officialSource,
-        sourceUrl,
-        finalUrl: final.toString(),
-        evidence: [],
-        warnings: [`Source returned HTTP ${response.status}`],
-        checkedAt
-      };
+      return { status: "unverified", trustLevel: officialSource ? 3 : 1, officialSource, sourceUrl, finalUrl: final.toString(), evidence: [], warnings: [`Source returned HTTP ${response.status}`], checkedAt };
     }
 
     const html = await response.text();
-    const title = html.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i)?.[1]?.replace(/\\s+/g, " ").trim();
-    const text = html
-      .replace(/<script[\\s\\S]*?<\\/script>/gi, " ")
-      .replace(/<style[\\s\\S]*?<\\/style>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\\s+/g, " ")
-      .trim();
+    const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s+/g, " ").trim();
+    const text = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     const combined = `${title ?? ""} ${text}`;
     const evidence: string[] = [];
     const warnings: string[] = [];
@@ -89,31 +75,13 @@ export async function verifySource(sourceUrl: string): Promise<VerificationResul
     if (suspicious) trustLevel = 1;
     if (!officialSource && final.hostname !== parsed.hostname) trustLevel = Math.min(trustLevel, 2);
 
-    return {
-      status: suspicious ? "suspicious" : trustLevel >= 5 ? "verified" : trustLevel >= 3 ? "partially_verified" : "unverified",
-      trustLevel,
-      officialSource,
-      sourceUrl,
-      finalUrl: final.toString(),
-      title,
-      evidence,
-      warnings,
-      checkedAt
-    };
+    return { status: suspicious ? "suspicious" : trustLevel >= 5 ? "verified" : trustLevel >= 3 ? "partially_verified" : "unverified", trustLevel, officialSource, sourceUrl, finalUrl: final.toString(), title, evidence, warnings, checkedAt };
   } catch (error) {
-    return {
-      status: "unverified",
-      trustLevel: 1,
-      officialSource: isOfficialDomain(parsed.hostname),
-      sourceUrl,
-      evidence: [],
-      warnings: [error instanceof Error ? error.message : "Unable to fetch source"],
-      checkedAt
-    };
+    return { status: "unverified", trustLevel: 1, officialSource: isOfficialDomain(parsed.hostname), sourceUrl, evidence: [], warnings: [error instanceof Error ? error.message : "Unable to fetch source"], checkedAt };
   }
 }
 
 function isOfficialDomain(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/^www\\./, "");
+  const host = hostname.toLowerCase().replace(/^www\./, "");
   return officialPatterns.some((pattern) => pattern.test(host));
 }
