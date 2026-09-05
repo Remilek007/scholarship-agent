@@ -17,6 +17,9 @@ export interface ApplicantProfile {
   minimumFunding: "substantial" | "full";
   academicScore?: number;
   academicScale?: number;
+  highestQualification?: string;
+  degreeField?: string;
+  workExperience?: string;
 }
 
 export interface ScholarshipEligibilityEvidence {
