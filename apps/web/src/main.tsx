@@ -20,7 +20,6 @@ function App() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [funding, setFunding] = React.useState("all");
-  const [includeReview, setIncludeReview] = React.useState(false);
   const [activeApplication, setActiveApplication] = React.useState<Application | null>(null);
   const [appLoading, setAppLoading] = React.useState(false);
 
@@ -52,7 +51,7 @@ function App() {
   return <main>
     <header className="hero"><div><p className="eyebrow">SCHOLARSHIP AGENT</p><h1>Your funded Master's shortlist.</h1><p className="sub">Forestry-first intelligence across scholarships, studentships, fellowships and funded research positions worldwide.</p></div><button onClick={() => void load()} disabled={loading}>{loading ? "Matching…" : "Refresh matches"}</button></header>
     <section className="stats"><div><strong>{items.length}</strong><span>qualifying matches</span></div><div><strong>{confirmed}</strong><span>eligibility confirmed</span></div><div><strong>{review}</strong><span>need review</span></div></section>
-    <section className="toolbar"><div><label>Funding</label><select value={funding} onChange={e => setFunding(e.target.value)}><option value="all">All qualifying</option><option value="fully_funded">Fully funded</option><option value="substantially_funded">Substantial funding</option></select></div><label className="check"><input type="checkbox" checked={includeReview} onChange={e => setIncludeReview(e.target.checked)} /> Include uncertain eligibility</label><p>Profile: Nigeria · Master's · Forestry/Wildlife + related environmental fields · CGPA 4.72/5</p></section>
+    <section className="toolbar"><div><label>Funding</label><select value={funding} onChange={e => setFunding(e.target.value)}><option value="all">All qualifying</option><option value="fully_funded">Fully funded</option><option value="substantially_funded">Substantial funding</option></select></div><p>Profile: Nigeria · Master's · Forestry/Wildlife + related environmental fields · CGPA 4.72/5</p></section>
     {error && <div className="error">{error}</div>}
     {!loading && !error && !visible.length && <div className="empty">No qualifying opportunities yet. Run discovery to populate the database.</div>}
     <section className="grid">{visible.map(item => <article className="card" key={item.id}>
@@ -69,10 +68,41 @@ function App() {
 
 function ApplicationPanel({ application, onClose, onUpdate }: { application: Application; onClose: () => void; onUpdate: (application: Application) => void }) {
   const [status, setStatus] = React.useState(application.status); const [notes, setNotes] = React.useState(application.notes ?? ""); const [saving, setSaving] = React.useState(false);
+  const required = application.requirements.filter(item => item.required);
+  const ready = required.filter(item => item.status === "ready" || item.status === "attached" || item.status === "waived");
+  const review = required.filter(item => item.status !== "ready" && item.status !== "attached" && item.status !== "waived");
+  const readiness = required.length ? Math.round((ready.length / required.length) * 100) : 0;
+  const categories = groupRequirements(application.requirements);
+
   async function save() { setSaving(true); try { const response = await fetch(`${API}/api/applications/${application.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, notes }) }); if (!response.ok) throw new Error("Unable to save application"); const data = await response.json() as { application: Application }; onUpdate(data.application); } catch (e) { console.error(e); } finally { setSaving(false); } }
-  return <div className="overlay"><section className="workspace"><header><div><p className="eyebrow">APPLICATION WORKSPACE</p><h2>Prepare this application</h2><p className="muted">Review requirements and drafts here. Final submission remains under your control.</p></div><button onClick={onClose}>Close</button></header><div className="workspace-grid"><div><h3>Application status</h3><select value={status} onChange={e => setStatus(e.target.value)}><option value="discovered">Discovered</option><option value="review">Review</option><option value="preparing">Preparing</option><option value="ready">Ready</option><option value="submitted">Submitted</option><option value="withdrawn">Withdrawn</option></select><h3>Requirements</h3><ul className="requirements">{application.requirements.length ? application.requirements.map(req => <li key={req.id}><strong>{req.name}</strong><span>{req.required ? "Required" : "Optional"} · {req.status}</span></li>) : <li>No requirements extracted yet.</li>}</ul></div><div><h3>Answers</h3>{application.answers.length ? application.answers.map(answer => <article className="answer" key={answer.id}><strong>{answer.field}</strong><p>{answer.answer}</p><small>{answer.reviewed ? "Reviewed" : "Needs review"} · AI policy: {answer.aiPolicy}</small></article>) : <div className="empty">No answers prepared yet. Requirements and questions will be populated from verified sources.</div>}<h3>Notes</h3><textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Your application notes…" /><button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save application"}</button></div></div></section></div>;
+  return <div className="overlay"><section className="workspace"><header><div><p className="eyebrow">APPLICATION WORKSPACE</p><h2>Prepare this application</h2><p className="muted">Requirements are extracted from the opportunity source. Final submission remains under your control.</p></div><button onClick={onClose}>Close</button></header>
+    <div className="readiness"><div><span>Application readiness</span><strong>{readiness}%</strong></div><div className="progress"><span style={{ width: `${readiness}%` }} /></div><small>{ready.length} of {required.length} required items ready · {review.length} still need attention</small></div>
+    <div className="workspace-grid"><div><h3>Application status</h3><select value={status} onChange={e => setStatus(e.target.value)}><option value="discovered">Discovered</option><option value="review">Review</option><option value="preparing">Preparing</option><option value="ready">Ready</option><option value="submitted">Submitted</option><option value="withdrawn">Withdrawn</option></select><h3>Requirements</h3>{Object.entries(categories).map(([category, requirements]) => <div className="requirement-group" key={category}><h4>{category}</h4><ul className="requirements">{requirements.map(req => <li key={req.id}><div><strong>{req.name}</strong><span>{req.required ? "Required" : "Optional"}</span></div><em className={`req-${req.status}`}>{labelRequirementStatus(req.status)}</em>{req.sourceInstruction && <small>{req.sourceInstruction}</small>}</li>)}</ul></div>)}{!application.requirements.length && <div className="empty">No requirements extracted yet.</div>}</div><div><h3>Answers</h3>{application.answers.length ? application.answers.map(answer => <article className="answer" key={answer.id}><strong>{answer.field}</strong><p>{answer.answer}</p><small>{answer.reviewed ? "Reviewed" : "Needs review"} · AI policy: {answer.aiPolicy}</small></article>) : <div className="empty">No answers prepared yet. Factual profile answers and application questions will appear here as the profile is expanded.</div>}<h3>Notes</h3><textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Your application notes…" /><button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save application"}</button></div></div></section></div>;
 }
 
+function groupRequirements(requirements: Requirement[]) {
+  const groups: Record<string, Requirement[]> = {};
+  for (const requirement of requirements) {
+    const category = categorizeRequirement(requirement.name);
+    (groups[category] ??= []).push(requirement);
+  }
+  return groups;
+}
+
+function categorizeRequirement(name: string) {
+  const value = name.toLowerCase();
+  if (value.includes("transcript") || value.includes("degree") || value.includes("academic")) return "Academic documents";
+  if (value.includes("curriculum") || value.includes("cv") || value.includes("resume")) return "CV / experience";
+  if (value.includes("statement") || value.includes("sop")) return "Personal statement";
+  if (value.includes("research") || value.includes("study proposal")) return "Research proposal";
+  if (value.includes("recommend") || value.includes("reference") || value.includes("referee")) return "References";
+  if (value.includes("english") || value.includes("ielts") || value.includes("toefl")) return "English evidence";
+  if (value.includes("passport") || value.includes("identification") || value.includes("nationality") || value.includes("citizenship")) return "Identity / nationality";
+  if (value.includes("portfolio") || value.includes("writing sample")) return "Portfolio / samples";
+  return "Other requirements";
+}
+
+function labelRequirementStatus(value: string) { return value === "attached" ? "Attached" : value === "ready" ? "Ready" : value === "waived" ? "Waived" : "Missing"; }
 function labelFunding(value: string) { return value === "fully_funded" ? "Fully funded" : value === "substantially_funded" ? "Substantial funding" : value.replaceAll("_", " "); }
 function labelEligibility(value: Match["eligibility"]) { return value === "confirmed_eligible" ? "Eligibility confirmed" : value === "probably_eligible" ? "Probably eligible" : value === "cannot_determine" ? "Needs verification" : "Not eligible"; }
 
