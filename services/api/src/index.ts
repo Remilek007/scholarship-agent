@@ -3,7 +3,7 @@ import express from "express";
 import { createScholarshipRepository } from "@scholarship-agent/database";
 import { buildDiscoveryQueries, scoreCandidate } from "@scholarship-agent/search";
 import type { ApplicantProfile, ScholarshipCandidate, OpportunityType } from "@scholarship-agent/shared";
-import { createDiscoveryEngine } from "@scholarship-agent/discovery";
+import { createDiscoveryEngine, verifySource } from "@scholarship-agent/discovery";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -80,8 +80,7 @@ app.post("/api/scholarships/:id/verify", async (req, res) => {
   if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
   const scholarship = await repository.getScholarship(req.params.id);
   if (!scholarship) return res.status(404).json({ error: "Scholarship not found" });
-  const engine = createDiscoveryEngine();
-  const result = await engine.verify(scholarship.sourceUrl);
+  const result = await verifySource(scholarship.sourceUrl);
   await repository.recordVerification(req.params.id, result);
   res.json(result);
 });
@@ -92,7 +91,7 @@ app.post("/api/applications", async (req, res) => {
   if (!scholarshipId) return res.status(400).json({ error: "scholarshipId is required" });
   const scholarship = await repository.getScholarship(scholarshipId);
   if (!scholarship) return res.status(404).json({ error: "Scholarship not found" });
-  res.json(await repository.createApplication({ scholarshipId }));
+  res.json(await repository.createApplication(scholarshipId));
 });
 
 app.get("/api/applications", async (_req, res) => {
@@ -139,7 +138,7 @@ app.put("/api/applications/:id/answers", async (req, res) => {
   const field = typeof req.body.field === "string" ? req.body.field.trim() : "";
   const answer = typeof req.body.answer === "string" ? req.body.answer : "";
   if (!field) return res.status(400).json({ error: "field is required" });
-  res.json(await repository.upsertAnswer(req.params.id, { field, answer, aiPolicy: parseAiPolicy(req.body.aiPolicy) ?? "unknown", reviewed: req.body.reviewed === true }));
+  res.json(await repository.upsertAnswer(req.params.id, field, answer, parseAiPolicy(req.body.aiPolicy) ?? "unknown", req.body.reviewed === true));
 });
 
 app.post("/api/applications/:id/events", async (req, res) => {
