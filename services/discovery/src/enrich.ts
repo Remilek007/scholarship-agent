@@ -47,9 +47,15 @@ export async function enrichDiscoveryRecords(
           travelCovered: /travel (grant|allowance|costs)|flight|airfare|relocation/i.test(extraction.text),
           insuranceCovered: /health insurance|medical insurance/i.test(extraction.text)
         };
+        const requirements = extraction.requirements.map((item) => ({
+          name: item.name,
+          required: item.required,
+          sourceInstruction: item.sourceInstruction
+        }));
         candidate.fundingClass = classifyFunding(funding);
         candidate.applicationUrl = extraction.applicationUrl ?? candidate.applicationUrl;
         candidate.deadline = parseDeadline(extraction.deadline) ?? candidate.deadline;
+        candidate.requirements = requirements;
         candidate.eligibility = {
           ...candidate.eligibility,
           ...extractEligibility(extraction.text)
@@ -59,6 +65,7 @@ export async function enrichDiscoveryRecords(
           sourceUrl: extraction.finalUrl,
           funding,
           eligibility: candidate.eligibility,
+          requirements,
           snippet: extraction.text.slice(0, 8_000)
         };
         const eligibility = assessEligibility(profile, candidate);
