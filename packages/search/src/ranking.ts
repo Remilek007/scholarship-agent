@@ -1,4 +1,5 @@
 import type { ApplicantProfile, ScholarshipCandidate } from "@scholarship-agent/shared";
+import { assessEligibility } from "./eligibility";
 import { isFundedEnough } from "./funding";
 import { scoreFieldRelevance } from "./relevance";
 
@@ -7,6 +8,7 @@ export interface RankedCandidate extends ScholarshipCandidate {
   reasons: string[];
   deadlineScore: number;
   eligibilityGate: "pass" | "review" | "fail";
+  eligibilityConfidence: number;
 }
 
 export function rankCandidates(profile: ApplicantProfile, candidates: ScholarshipCandidate[]): RankedCandidate[] {
@@ -17,12 +19,13 @@ export function rankCandidates(profile: ApplicantProfile, candidates: Scholarshi
       ? Math.min(1, Math.max(0, profile.academicScore / profile.academicScale))
       : 0.5;
     const deadline = deadlineScore(candidate.deadline);
-    const eligibilityGate = gate(candidate, profile, field, funding);
+    const eligibility = assessEligibility(profile, candidate);
+    const eligibilityGate = gate(candidate, eligibility.status, field, funding);
 
-    // Funding is a hard requirement for this agent. Unknown/partial funding
-    // stays out of the qualifying pool even when field relevance is excellent.
+    // Funding and confirmed hard exclusions are gates, not trade-offs. A highly
+    // relevant but ineligible opportunity must never outrank a viable one.
     const score = eligibilityGate === "fail"
-      ? Math.min(0.39, field * 0.35 + funding * 0.2 + academic * 0.15 + deadline * 0.05)
+      ? 0
       : field * 0.4 + funding * 0.25 + academic * 0.2 + deadline * 0.15;
 
     const reasons = [
@@ -30,17 +33,32 @@ export function rankCandidates(profile: ApplicantProfile, candidates: Scholarshi
       funding ? "Funding meets the minimum requirement" : "Funding is not verified as sufficient",
       deadline >= 0.8 ? "Deadline is active and relatively soon" : deadline > 0 ? "Deadline is active" : "Deadline is not yet known"
     ];
-    if (eligibilityGate === "review") reasons.push("Some eligibility details still need verification");
-    if (eligibilityGate === "fail") reasons.push("Does not currently pass the funded Master's qualification gate");
+    if (eligibility.status === "confirmed_eligible") reasons.push("Eligibility evidence supports the applicant profile");
+    else if (eligibilityGate === "review") reasons.push("Some eligibility details still need verification");
+    if (eligibility.status === "not_eligible") reasons.push("Hard eligibility exclusion detected");
 
-    return { ...candidate, score, reasons, deadlineScore: deadline, eligibilityGate };
+    return {
+      ...candidate,
+      score,
+      reasons,
+      deadlineScore: deadline,
+      eligibilityGate,
+      eligibilityConfidence: eligibility.confidence
+    };
   }).sort((a, b) => b.score - a.score);
 }
 
-function gate(candidate: ScholarshipCandidate, profile: ApplicantProfile, field: number, funding: number): "pass" | "review" | "fail" {
+function gate(
+  candidate: ScholarshipCandidate,
+  eligibility: ReturnType<typeof assessEligibility>["status"],
+  field: number,
+  funding: number
+): "pass" | "review" | "fail" {
   if (!funding) return "fail";
-  if (candidate.degreeLevel && candidate.degreeLevel !== profile.degreeLevel) return "fail";
+  if (eligibility === "not_eligible") return "fail";
+  if (candidate.degreeLevel === "phd" || candidate.degreeLevel === "undergraduate") return "fail";
   if (field < 0.35) return "review";
+  if (eligibility === "cannot_determine") return "review";
   return "pass";
 }
 
