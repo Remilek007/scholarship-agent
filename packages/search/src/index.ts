@@ -52,4 +52,4 @@ export { prepareApplicationIntelligence } from "./application";
 export type { ApplicationAnswerDraft, ApplicationPreparation, ApplicationQuestion } from "./application";
 export type { SearchProvider, SearchResult } from "./sources";
 export { uniqueSearchResults } from "./sources";
-export { PublicSearchProvider, RssSearchProvider } from "./providers";
+export { BraveSearchProvider, PublicSearchProvider, RssSearchProvider, TavilySearchProvider } from "./providers";
