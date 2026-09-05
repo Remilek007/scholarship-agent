@@ -85,8 +85,8 @@ app.post("/api/matches", async (req, res) => {
         deadline: row.deadline?.toISOString(), eligibility: evidenceById.get(row.id)
       };
       return { ...row, match: scoreCandidate(parsed.data, candidate) };
-    }).filter((item: { match: ReturnType<typeof scoreCandidate> }) => item.match.eligibility !== "not_eligible").sort((a, b) => b.match.overallScore - a.match.overallScore).slice(0, limit);
-    return res.json({ matches: scored.map((item: { match: ReturnType<typeof scoreCandidate> }) => includeReview ? item : { ...item, match: { ...item.match, reasons: undefined } }) });
+    }).filter((item) => item.match.eligibility !== "not_eligible").sort((a, b) => b.match.overallScore - a.match.overallScore).slice(0, limit);
+    return res.json({ matches: scored.map((item) => includeReview ? item : { ...item, match: { ...item.match, reasons: undefined } }) });
   } catch (error) { return res.status(500).json({ error: "Matching failed", details: error instanceof Error ? error.message : "Unknown error" }); }
 });
 
@@ -192,7 +192,7 @@ app.put("/api/applications/:id/requirements", async (req, res) => {
       status: typeof item.status === "string" ? item.status : "missing",
       sourceInstruction: typeof item.sourceInstruction === "string" ? item.sourceInstruction : undefined
     }))
-    .filter((item) => item.name);
+    .filter((item: { name: string }) => Boolean(item.name));
   try {
     const repository = createScholarshipRepository();
     if (!(await repository.getApplication(req.params.id))) return res.status(404).json({ error: "Application not found" });
@@ -256,7 +256,7 @@ function isOpportunityType(value: string | null | undefined): value is Opportuni
   return value === "scholarship" || value === "studentship" || value === "research_position" || value === "assistantship" || value === "fellowship" || value === "grant" || value === "other";
 }
 
-function isDegreeLevel(value: string | null | undefined): value is ScholarshipCandidate["degreeLevel"] {
+function isDegreeLevel(value: string | null): value is ScholarshipCandidate["degreeLevel"] {
   return value === "masters" || value === "phd" || value === "undergraduate" || value === "other";
 }
 
