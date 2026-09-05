@@ -3,8 +3,7 @@ import express from "express";
 import { createScholarshipRepository } from "@scholarship-agent/database";
 import { buildDiscoveryQueries, scoreCandidate } from "@scholarship-agent/search";
 import type { ApplicantProfile, ScholarshipCandidate, OpportunityType } from "@scholarship-agent/shared";
-import { createDiscoveryEngine, verifySource } from "@scholarship-agent/discovery";
-import { getEnabledSourceRegistry } from "@scholarship-agent/discovery/source-registry";
+import { createDiscoveryEngine, getEnabledSourceRegistry, verifySource } from "@scholarship-agent/discovery";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
