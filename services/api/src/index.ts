@@ -1,7 +1,7 @@
 import cors from "cors";
 import express from "express";
 import { createScholarshipRepository } from "@scholarship-agent/database";
-import { buildDiscoveryQueries, scoreCandidate } from "@scholarship-agent/search";
+import { buildDiscoveryQueries, rankCandidates, scoreCandidate } from "@scholarship-agent/search";
 import type { ApplicantProfile, ScholarshipCandidate, OpportunityType } from "@scholarship-agent/shared";
 import { createDiscoveryEngine, getEnabledSourceRegistry, verifySource } from "@scholarship-agent/discovery";
 
@@ -39,8 +39,10 @@ app.post("/api/discovery/plan", (req, res) => {
 app.post("/api/discovery/run", async (req, res) => {
   try {
     const profile = req.body.profile as ApplicantProfile;
+    const deepEnrich = req.body.deepEnrich !== false;
+    const limit = typeof req.body.limit === "number" ? Math.floor(req.body.limit) : undefined;
     const engine = createDiscoveryEngine();
-    const result = await engine.searchAndPersist(profile);
+    const result = await engine.searchAndPersist(profile, { deepEnrich, limit });
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Discovery run failed" });
@@ -63,6 +65,32 @@ app.post("/api/matches", (req, res) => {
   const candidates = Array.isArray(req.body.candidates) ? req.body.candidates as ScholarshipCandidate[] : [];
   const matches = candidates.map((candidate) => ({ candidate, match: scoreCandidate(profile, candidate) }));
   res.json(matches);
+});
+
+app.post("/api/matches/top", async (req, res) => {
+  if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
+  try {
+    const profile = req.body.profile as ApplicantProfile;
+    const limit = typeof req.body.limit === "number" ? Math.min(Math.max(Math.floor(req.body.limit), 1), 20) : 10;
+    const rows = await repository.listScholarships({ fundingClass: undefined, degreeLevel: "masters", limit: 200 });
+    const candidates: ScholarshipCandidate[] = rows.map((row) => ({
+      title: row.title,
+      provider: row.provider ?? undefined,
+      university: row.university ?? undefined,
+      country: row.country ?? undefined,
+      degreeLevel: isDegreeLevel(row.degreeLevel) ? row.degreeLevel : undefined,
+      opportunityType: isOpportunityType(row.opportunityType) ? row.opportunityType : undefined,
+      fields: Array.isArray(row.fields) ? row.fields : [],
+      sourceUrl: row.sourceUrl,
+      applicationUrl: row.applicationUrl ?? undefined,
+      fundingClass: isFundingClass(row.fundingClass) ? row.fundingClass : "unknown",
+      deadline: row.deadline ? row.deadline.toISOString() : undefined
+    }));
+    const ranked = rankCandidates(profile, candidates).filter((candidate) => candidate.eligibilityGate !== "fail").slice(0, limit);
+    res.json({ profile, count: ranked.length, matches: ranked });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Unable to rank scholarship matches" });
+  }
 });
 
 app.get("/api/scholarships", async (req, res) => {
@@ -159,11 +187,6 @@ app.post("/api/applications/:id/prepare", async (req, res) => {
   await repository.recordApplicationEvent(req.params.id, "preparation_started", { userRequested: true });
   res.json({ application, nextStep: "review_requirements", finalSubmissionRequiresUserApproval: true });
 });
-
-function parseOpportunityType(value: unknown): OpportunityType | undefined {
-  if (typeof value !== "string" || !value) return undefined;
-  return isOpportunityType(value) ? value : undefined;
-}
 
 function parseAiPolicy(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
