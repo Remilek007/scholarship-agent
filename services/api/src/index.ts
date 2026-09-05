@@ -117,6 +117,97 @@ app.get("/api/scholarships/:id", async (req, res) => {
   } catch (error) { return res.status(500).json({ error: "Failed to load scholarship", details: error instanceof Error ? error.message : "Unknown error" }); }
 });
 
+app.post("/api/applications", async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "DATABASE_URL is not configured" });
+  const scholarshipId = typeof req.body?.scholarshipId === "string" ? req.body.scholarshipId : "";
+  if (!scholarshipId) return res.status(400).json({ error: "scholarshipId is required" });
+  const aiPolicy = parseAiPolicy(req.body?.aiPolicy);
+  if (!aiPolicy) return res.status(400).json({ error: "aiPolicy must be unknown, allowed, restricted, or prohibited" });
+  try {
+    const repository = createScholarshipRepository();
+    if (!(await repository.getScholarship(scholarshipId))) return res.status(404).json({ error: "Scholarship not found" });
+    const application = await repository.createApplication(scholarshipId, aiPolicy, typeof req.body?.notes === "string" ? req.body.notes : undefined);
+    return res.status(201).json({ application });
+  } catch (error) { return res.status(500).json({ error: "Application creation failed", details: error instanceof Error ? error.message : "Unknown error" }); }
+});
+
+app.get("/api/applications", async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "DATABASE_URL is not configured" });
+  try {
+    const repository = createScholarshipRepository();
+    const applications = await repository.listApplications(typeof req.query.limit === "string" ? Number(req.query.limit) : 50);
+    return res.json({ count: applications.length, applications });
+  } catch (error) { return res.status(500).json({ error: "Failed to load applications", details: error instanceof Error ? error.message : "Unknown error" }); }
+});
+
+app.get("/api/applications/:id", async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "DATABASE_URL is not configured" });
+  try {
+    const repository = createScholarshipRepository();
+    const application = await repository.getApplication(req.params.id);
+    if (!application) return res.status(404).json({ error: "Application not found" });
+    return res.json({ application });
+  } catch (error) { return res.status(500).json({ error: "Failed to load application", details: error instanceof Error ? error.message : "Unknown error" }); }
+});
+
+app.patch("/api/applications/:id", async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "DATABASE_URL is not configured" });
+  const status = typeof req.body?.status === "string" ? req.body.status : undefined;
+  const aiPolicy = req.body?.aiPolicy === undefined ? undefined : parseAiPolicy(req.body.aiPolicy);
+  if (req.body?.aiPolicy !== undefined && !aiPolicy) return res.status(400).json({ error: "Invalid aiPolicy" });
+  try {
+    const repository = createScholarshipRepository();
+    const application = await repository.updateApplication(req.params.id, { status, aiPolicy, notes: typeof req.body?.notes === "string" ? req.body.notes : undefined });
+    if (!application) return res.status(404).json({ error: "Application not found" });
+    return res.json({ application });
+  } catch (error) { return res.status(500).json({ error: "Application update failed", details: error instanceof Error ? error.message : "Unknown error" }); }
+});
+
+app.put("/api/applications/:id/requirements", async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "DATABASE_URL is not configured" });
+  if (!Array.isArray(req.body?.requirements)) return res.status(400).json({ error: "requirements must be an array" });
+  const requirements = req.body.requirements.filter((item: unknown): item is Record<string, unknown> => typeof item === "object" && item !== null).map((item) => ({
+    name: typeof item.name === "string" ? item.name.trim() : "",
+    required: item.required !== false,
+    status: typeof item.status === "string" ? item.status : "missing",
+    sourceInstruction: typeof item.sourceInstruction === "string" ? item.sourceInstruction : undefined
+  })).filter((item) => item.name);
+  try {
+    const repository = createScholarshipRepository();
+    if (!(await repository.getApplication(req.params.id))) return res.status(404).json({ error: "Application not found" });
+    const application = await repository.replaceRequirements(req.params.id, requirements);
+    return res.json({ application });
+  } catch (error) { return res.status(500).json({ error: "Requirement update failed", details: error instanceof Error ? error.message : "Unknown error" }); }
+});
+
+app.put("/api/applications/:id/answers", async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "DATABASE_URL is not configured" });
+  const field = typeof req.body?.field === "string" ? req.body.field.trim() : "";
+  const answer = typeof req.body?.answer === "string" ? req.body.answer : "";
+  const aiPolicy = parseAiPolicy(req.body?.aiPolicy ?? "unknown");
+  if (!field || !answer) return res.status(400).json({ error: "field and answer are required" });
+  if (!aiPolicy) return res.status(400).json({ error: "Invalid aiPolicy" });
+  try {
+    const repository = createScholarshipRepository();
+    if (!(await repository.getApplication(req.params.id))) return res.status(404).json({ error: "Application not found" });
+    const saved = await repository.upsertAnswer(req.params.id, field, answer, aiPolicy, req.body?.reviewed === true);
+    return res.json({ answer: saved });
+  } catch (error) { return res.status(500).json({ error: "Answer save failed", details: error instanceof Error ? error.message : "Unknown error" }); }
+});
+
+app.post("/api/applications/:id/events", async (req, res) => {
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "DATABASE_URL is not configured" });
+  const eventType = typeof req.body?.eventType === "string" ? req.body.eventType.trim() : "";
+  if (!eventType) return res.status(400).json({ error: "eventType is required" });
+  try {
+    const repository = createScholarshipRepository();
+    if (!(await repository.getApplication(req.params.id))) return res.status(404).json({ error: "Application not found" });
+    const details = typeof req.body?.details === "object" && req.body.details !== null ? req.body.details as Record<string, unknown> : {};
+    const event = await repository.recordApplicationEvent(req.params.id, eventType, details);
+    return res.status(201).json({ event });
+  } catch (error) { return res.status(500).json({ error: "Application event failed", details: error instanceof Error ? error.message : "Unknown error" }); }
+});
+
 function parseLimit(value: unknown, fallback: number, max: number): number {
   if (typeof value !== "string" || !value) return fallback;
   const parsed = Number(value);
@@ -133,6 +224,11 @@ function parseTrustLevel(value: unknown, fallback: number): number | null {
 function parseOpportunityType(value: unknown): OpportunityType | undefined {
   if (typeof value !== "string" || !value) return undefined;
   return isOpportunityType(value) ? value : undefined;
+}
+
+function parseAiPolicy(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  return ["unknown", "allowed", "restricted", "prohibited"].includes(value) ? value : undefined;
 }
 
 function isOpportunityType(value: string | null | undefined): value is OpportunityType {
