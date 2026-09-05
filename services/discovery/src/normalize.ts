@@ -10,6 +10,7 @@ export interface NormalizedScholarship extends ScholarshipCandidate {
     sourceUrl: string;
     funding: FundingEvidence;
     eligibility: NonNullable<ScholarshipCandidate["eligibility"]>;
+    requirements?: NonNullable<ScholarshipCandidate["requirements"]>;
   };
 }
 
@@ -69,8 +70,9 @@ export function normalizeDiscoveryRecord(record: DiscoveryRecord): NormalizedSch
     fundingClass,
     deadline,
     eligibility,
+    requirements: [],
     canonicalKey: canonicalKey(title, provider),
-    evidence: { title, snippet, sourceUrl, funding, eligibility }
+    evidence: { title, snippet, sourceUrl, funding, eligibility, requirements: [] }
   };
 }
 
