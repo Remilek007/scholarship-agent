@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { createDatabase } from "./client";
-import { discoveryRecords, scholarshipFunding, scholarshipSnapshots, scholarshipSources, scholarships } from "./schema";
+import { applicationAnswers, applicationEvents, applicationRequirements, applications, discoveryRecords, scholarshipFunding, scholarshipSnapshots, scholarshipSources, scholarships } from "./schema";
 
 export interface ScholarshipEligibilityEvidence {
   internationalStudents?: boolean;
@@ -51,6 +51,13 @@ export interface SourceVerificationInput {
   evidence: string[];
   warnings: string[];
   checkedAt: string;
+}
+
+export interface ApplicationRequirementInput {
+  name: string;
+  required?: boolean;
+  status?: string;
+  sourceInstruction?: string;
 }
 
 export function createScholarshipRepository(databaseUrl?: string) {
@@ -158,6 +165,55 @@ export function createScholarshipRepository(databaseUrl?: string) {
       if (filters.opportunityType) conditions.push(eq(scholarships.opportunityType, filters.opportunityType));
       if (filters.minTrustLevel !== undefined) conditions.push(gte(scholarships.trustLevel, filters.minTrustLevel));
       return db.select().from(scholarships).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(scholarships.updatedAt)).limit(Math.min(Math.max(filters.limit ?? 50, 1), 200));
+    },
+
+    async createApplication(scholarshipId: string, aiPolicy = "unknown", notes?: string) {
+      const [application] = await db.insert(applications).values({ scholarshipId, aiPolicy, notes, status: "discovered", updatedAt: new Date() }).onConflictDoUpdate({
+        target: applications.scholarshipId,
+        set: { aiPolicy, notes, updatedAt: new Date() }
+      }).returning();
+      if (!application) throw new Error("Application creation failed");
+      return this.getApplication(application.id);
+    },
+
+    async getApplication(id: string) {
+      const [application] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+      if (!application) return undefined;
+      const [requirements, answers, events] = await Promise.all([
+        db.select().from(applicationRequirements).where(eq(applicationRequirements.applicationId, id)).orderBy(applicationRequirements.createdAt),
+        db.select().from(applicationAnswers).where(eq(applicationAnswers.applicationId, id)).orderBy(applicationAnswers.field),
+        db.select().from(applicationEvents).where(eq(applicationEvents.applicationId, id)).orderBy(desc(applicationEvents.createdAt)).limit(100)
+      ]);
+      return { ...application, requirements, answers, events };
+    },
+
+    async listApplications(limit = 50) {
+      return db.select().from(applications).orderBy(desc(applications.updatedAt)).limit(Math.min(Math.max(limit, 1), 200));
+    },
+
+    async updateApplication(id: string, input: { status?: string; aiPolicy?: string; notes?: string }) {
+      const [application] = await db.update(applications).set({ ...input, updatedAt: new Date() }).where(eq(applications.id, id)).returning();
+      return application ? this.getApplication(application.id) : undefined;
+    },
+
+    async replaceRequirements(applicationId: string, requirements: ApplicationRequirementInput[]) {
+      await db.delete(applicationRequirements).where(eq(applicationRequirements.applicationId, applicationId));
+      if (requirements.length) await db.insert(applicationRequirements).values(requirements.map((item) => ({ applicationId, name: item.name, required: item.required ?? true, status: item.status ?? "missing", sourceInstruction: item.sourceInstruction })));
+      return this.getApplication(applicationId);
+    },
+
+    async upsertAnswer(applicationId: string, field: string, answer: string, aiPolicy = "unknown", reviewed = false) {
+      const [saved] = await db.insert(applicationAnswers).values({ applicationId, field, answer, aiPolicy, reviewed, updatedAt: new Date() }).onConflictDoUpdate({
+        target: [applicationAnswers.applicationId, applicationAnswers.field],
+        set: { answer, aiPolicy, reviewed, updatedAt: new Date() }
+      }).returning();
+      return saved;
+    },
+
+    async recordApplicationEvent(applicationId: string, eventType: string, details: Record<string, unknown> = {}) {
+      const [event] = await db.insert(applicationEvents).values({ applicationId, eventType, details }).returning();
+      await db.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, applicationId));
+      return event;
     }
   };
 }
