@@ -14,6 +14,7 @@ export interface DiscoveryRecord {
 
 export interface ScholarshipSource {
   readonly name: string;
+  readonly runOnce?: boolean;
   search(query: string): Promise<DiscoveryRecord[]>;
   healthCheck(): Promise<boolean>;
 }
@@ -23,8 +24,16 @@ export class DiscoveryEngine {
   async plan(profile: ApplicantProfile): Promise<string[]> { return buildDiscoveryQueries(profile); }
   async search(profile: ApplicantProfile, queries = buildDiscoveryQueries(profile)): Promise<DiscoveryRecord[]> {
     const records: DiscoveryRecord[] = [];
+    const onceSources = this.sources.filter((source) => source.runOnce);
+    const querySources = this.sources.filter((source) => !source.runOnce);
+
+    if (onceSources.length) {
+      const results = await Promise.allSettled(onceSources.map((source) => source.search("registry discovery")));
+      for (const result of results) if (result.status === "fulfilled") records.push(...result.value);
+    }
+
     for (const query of queries) {
-      const results = await Promise.allSettled(this.sources.map((source) => source.search(query)));
+      const results = await Promise.allSettled(querySources.map((source) => source.search(query)));
       for (const result of results) if (result.status === "fulfilled") records.push(...result.value);
     }
     return deduplicateRecords(records);
@@ -61,6 +70,7 @@ function canonicalizeUrl(input: string): string {
 
 export { createDiscoveryEngine } from "./factory";
 export { HttpPageSource } from "./http";
+export { RegistrySource } from "./registry-source";
 export { normalizeDiscoveryRecord, normalizeDiscoveryRecords } from "./normalize";
 export type { NormalizedScholarship } from "./normalize";
 export { verifySource } from "./verification";
