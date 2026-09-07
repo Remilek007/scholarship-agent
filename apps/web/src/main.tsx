@@ -17,17 +17,19 @@ type Preparation = { factualAnswers: Array<{ field: string; answer: string; aiPo
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 const PROFILE = {
   nationality: "Nigeria", degreeLevel: "masters", targetFields: ["forestry", "wildlife", "conservation", "natural_resources", "climate", "geospatial"],
-  minimumFunding: "substantial", academicScore: 4.72, academicScale: 5,
+  minimumFunding: "substantially_funded", academicScore: 4.72, academicScale: 5,
   highestQualification: "B.Sc Forestry & Wildlife", degreeField: "Forestry & Wildlife", workExperience: ""
 };
 
 function App() {
   const [items, setItems] = React.useState<Match[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const [discovering, setDiscovering] = React.useState(false);
   const [error, setError] = React.useState("");
   const [funding, setFunding] = React.useState("all");
   const [activeApplication, setActiveApplication] = React.useState<Application | null>(null);
   const [appLoading, setAppLoading] = React.useState(false);
+  const [discoverySummary, setDiscoverySummary] = React.useState("");
 
   async function load() {
     setLoading(true); setError("");
@@ -37,6 +39,18 @@ function App() {
       const data = await response.json() as { matches: Match[] }; setItems(data.matches ?? []);
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to calculate matches"); }
     finally { setLoading(false); }
+  }
+
+  async function discover() {
+    setDiscovering(true); setError(""); setDiscoverySummary("");
+    try {
+      const response = await fetch(`${API}/api/discovery/run`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ profile: PROFILE, deepEnrich: true, limit: 60 }) });
+      if (!response.ok) throw new Error(`Discovery API returned ${response.status}`);
+      const data = await response.json() as { records?: unknown[]; enriched?: unknown[]; persistence?: { persisted?: number; verified?: number } };
+      setDiscoverySummary(`Discovered ${data.records?.length ?? 0} sources · enriched ${data.enriched?.length ?? 0} · verified ${data.persistence?.verified ?? 0}`);
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to run discovery"); }
+    finally { setDiscovering(false); }
   }
 
   async function openApplication(scholarshipId: string) {
@@ -55,11 +69,12 @@ function App() {
   const review = items.filter(item => item.eligibility === "cannot_determine" || item.eligibility === "probably_eligible").length;
 
   return <main>
-    <header className="hero"><div><p className="eyebrow">SCHOLARSHIP AGENT</p><h1>Your funded Master's shortlist.</h1><p className="sub">Forestry-first intelligence across scholarships, studentships, fellowships and funded research positions worldwide.</p></div><button onClick={() => void load()} disabled={loading}>{loading ? "Matching…" : "Refresh matches"}</button></header>
+    <header className="hero"><div><p className="eyebrow">SCHOLARSHIP AGENT</p><h1>Your funded Master's shortlist.</h1><p className="sub">Forestry-first intelligence across scholarships, studentships, fellowships and funded research positions worldwide.</p></div><div className="hero-actions"><button onClick={() => void discover()} disabled={discovering || loading}>{discovering ? "Discovering…" : "Discover opportunities"}</button><button onClick={() => void load()} disabled={loading || discovering}>{loading ? "Matching…" : "Refresh matches"}</button></div></header>
     <section className="stats"><div><strong>{items.length}</strong><span>qualifying matches</span></div><div><strong>{confirmed}</strong><span>eligibility confirmed</span></div><div><strong>{review}</strong><span>need review</span></div></section>
+    {discoverySummary && <div className="success">{discoverySummary}</div>}
     <section className="toolbar"><div><label>Funding</label><select value={funding} onChange={e => setFunding(e.target.value)}><option value="all">All qualifying</option><option value="fully_funded">Fully funded</option><option value="substantially_funded">Substantial funding</option></select></div><p>Profile: Nigeria · Master's · B.Sc Forestry & Wildlife · CGPA 4.72/5 · Forestry/Wildlife + related environmental fields</p></section>
     {error && <div className="error">{error}</div>}
-    {!loading && !error && !visible.length && <div className="empty">No qualifying opportunities yet. Run discovery to populate the database.</div>}
+    {!loading && !error && !visible.length && <div className="empty">No qualifying opportunities yet. Click <strong>Discover opportunities</strong> to search the maintained source registry and populate the database.</div>}
     <section className="grid">{visible.map(item => <article className="card" key={item.id}>
       <div className="cardtop"><span className="score">{Math.round(item.score * 100)}% match</span><span className="pill">{labelFunding(item.fundingClass)}</span><span>Trust {item.trustLevel}/5</span></div>
       <h2>{item.title}</h2><p className="muted">{[item.provider, item.university, item.country].filter(Boolean).join(" · ") || "Provider not yet verified"}</p>
@@ -128,7 +143,6 @@ function ApplicationPanel({ application, onClose, onUpdate }: { application: App
 
 function groupRequirements(requirements: Requirement[]) { const groups: Record<string, Requirement[]> = {}; for (const requirement of requirements) { const category = categorizeRequirement(requirement.name); (groups[category] ??= []).push(requirement); } return groups; }
 function categorizeRequirement(name: string) { const value = name.toLowerCase(); if (value.includes("transcript") || value.includes("degree") || value.includes("academic")) return "Academic documents"; if (value.includes("curriculum") || value.includes("cv") || value.includes("resume")) return "CV / experience"; if (value.includes("statement") || value.includes("sop")) return "Personal statement"; if (value.includes("research") || value.includes("study proposal")) return "Research proposal"; if (value.includes("recommend") || value.includes("reference") || value.includes("referee")) return "References"; if (value.includes("english") || value.includes("ielts") || value.includes("toefl")) return "English evidence"; if (value.includes("passport") || value.includes("identification") || value.includes("nationality") || value.includes("citizenship")) return "Identity / nationality"; if (value.includes("portfolio") || value.includes("writing sample")) return "Portfolio / samples"; return "Other requirements"; }
-function labelRequirementStatus(value: string) { return value === "attached" ? "Attached" : value === "ready" ? "Ready" : value === "waived" ? "Waived" : "Missing"; }
 function labelFunding(value: string) { return value === "fully_funded" ? "Fully funded" : value === "substantially_funded" ? "Substantial funding" : value.replaceAll("_", " "); }
 function labelEligibility(value: Match["eligibility"]) { return value === "confirmed_eligible" ? "Eligibility confirmed" : value === "probably_eligible" ? "Probably eligible" : value === "cannot_determine" ? "Needs verification" : "Not eligible"; }
 function prettyField(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, letter => letter.toUpperCase()); }
