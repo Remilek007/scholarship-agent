@@ -1,12 +1,12 @@
 import type { SearchProvider } from "@scholarship-agent/search";
 import { BraveSearchProvider, PublicSearchProvider, RssSearchProvider, TavilySearchProvider } from "@scholarship-agent/search";
-import { DiscoveryEngine, type DiscoveryRecord, type ScholarshipSource } from "./index";
+import { DiscoveryEngine, type DiscoveryRecord, type ScholarshipSource, RegistrySource, getEnabledSourceRegistry } from "./index";
 import { loadDiscoveryConfig } from "./config";
 import { HttpPageSource } from "./http";
 
 export function createDiscoveryEngine(): DiscoveryEngine {
   const config = loadDiscoveryConfig();
-  const sources: ScholarshipSource[] = [];
+  const sources: ScholarshipSource[] = [new RegistrySource(getEnabledSourceRegistry())];
 
   if (config.directUrls.length) {
     sources.push(new HttpPageSource({ name: "configured-direct-pages", urls: config.directUrls }));
