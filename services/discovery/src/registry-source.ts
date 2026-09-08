@@ -9,7 +9,6 @@ const MAX_RECORDS = 250;
 const MAX_PAGES_PER_SOURCE = 20;
 const MAX_SITEMAP_URLS = 80;
 
-/** Discovery fallback that works without a paid search API. */
 export class RegistrySource implements ScholarshipSource {
   readonly name = "source-registry";
   readonly runOnce = true;
@@ -22,7 +21,6 @@ export class RegistrySource implements ScholarshipSource {
   async search(query: string): Promise<DiscoveryRecord[]> {
     const records: DiscoveryRecord[] = [];
     const seenUrls = new Set<string>();
-
     for (const definition of this.definitions) {
       for (const seedUrl of definition.urls) {
         if (records.length >= MAX_RECORDS) return records;
@@ -45,9 +43,7 @@ export class RegistrySource implements ScholarshipSource {
         try {
           const response = await fetch(url, { method: "GET", headers: { "user-agent": "ScholarshipAgent/0.1 (+opportunity-discovery)" }, signal: AbortSignal.timeout(8_000) });
           if (response.ok) return true;
-        } catch {
-          // Try the next source.
-        }
+        } catch { /* try next source */ }
       }
     }
     return false;
@@ -60,7 +56,6 @@ async function crawlSource(definition: DiscoverySourceDefinition, seedUrl: strin
   const queue: string[] = [seedUrl];
   const seed = new URL(seedUrl);
   const sitemapUrls = await discoverSitemapUrls(seedUrl, seed.hostname);
-
   for (const sitemapUrl of sitemapUrls) {
     if (queue.length >= MAX_PAGES_PER_SOURCE * 3) break;
     queue.push(sitemapUrl);
@@ -71,17 +66,14 @@ async function crawlSource(definition: DiscoverySourceDefinition, seedUrl: strin
     const canonical = canonicalizeUrl(current);
     if (visited.has(canonical)) continue;
     visited.add(canonical);
-
     const page = await fetchPage(current);
     if (!page) continue;
     const title = extractTitle(page.html) ?? definition.name;
     const text = visibleText(page.html);
     const value = `${title} ${text.slice(0, 12000)} ${page.url}`;
-
     if (USEFUL_TERMS.test(value) || OPPORTUNITY_TERMS.test(page.url)) {
       records.push({ url: page.url, title, snippet: `${definition.name}: ${text.slice(0, 1800)}`, source: definition.name, discoveryMethod: "registry_crawl", query });
     }
-
     for (const match of page.html.matchAll(LINK_PATTERN)) {
       if (visited.size + queue.length >= MAX_PAGES_PER_SOURCE * 2) break;
       const href = match[1]?.trim();
@@ -134,6 +126,6 @@ async function fetchPage(url: string): Promise<{ url: string; html: string } | u
 
 function extractTitle(html: string): string | undefined { return clean(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]); }
 function visibleText(html: string): string { return clean(html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<noscript[\s\S]*?<\/noscript>/gi, " ").replace(/<[^>]+>/g, " ")) ?? ""; }
-function decodeEntities(value: string): string { return value.replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">`).replace(/&quot;/gi, '"').replace(/&#39;/gi, "'"); }
+function decodeEntities(value: string): string { return value.replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;/gi, "'"); }
 function clean(value: string | undefined): string | undefined { if (!value) return undefined; return decodeEntities(value).replace(/\s+/g, " ").trim() || undefined; }
 function canonicalizeUrl(input: string): string { try { const url = new URL(input); url.hash = ""; url.search = ""; url.hostname = url.hostname.toLowerCase(); return url.toString().replace(/\/$/, ""); } catch { return input.trim().toLowerCase(); } }
