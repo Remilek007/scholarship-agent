@@ -1,7 +1,7 @@
 import cors from "cors";
 import express from "express";
 import { createScholarshipRepository } from "@scholarship-agent/database";
-import { buildDiscoveryQueries, prepareApplicationIntelligence, rankCandidates, scoreCandidate } from "@scholarship-agent/search";
+import { analyzeApplicantDocument, buildDiscoveryQueries, prepareApplicationIntelligence, rankCandidates, scoreCandidate } from "@scholarship-agent/search";
 import type { ApplicantProfile, ScholarshipCandidate, OpportunityType } from "@scholarship-agent/shared";
 import { createDiscoveryEngine, createDiscoveryScheduler, getEnabledSourceRegistry, readScheduledProfile, verifySource } from "@scholarship-agent/discovery";
 
@@ -68,6 +68,13 @@ app.post("/api/discovery/search", async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Discovery search failed" });
   }
+});
+
+app.post("/api/documents/analyze", (req, res) => {
+  const text = typeof req.body.text === "string" ? req.body.text : "";
+  const documentType = req.body.documentType === "cv" || req.body.documentType === "transcript" || req.body.documentType === "statement" || req.body.documentType === "unknown" ? req.body.documentType : undefined;
+  if (!text.trim()) return res.status(400).json({ error: "text is required" });
+  res.json(analyzeApplicantDocument(text, documentType));
 });
 
 app.post("/api/matches", (req, res) => {
