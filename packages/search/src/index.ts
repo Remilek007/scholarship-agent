@@ -28,6 +28,8 @@ export { rankCandidates } from "./ranking";
 export { scoreFieldRelevance } from "./relevance";
 export { prepareApplicationIntelligence } from "./application";
 export type { ApplicationAnswerDraft, ApplicationPreparation, ApplicationQuestion } from "./application";
+export { analyzeApplicantDocument } from "./document-intelligence";
+export type { DocumentAnalysis, DocumentFact } from "./document-intelligence";
 export type { SearchProvider, SearchResult } from "./sources";
 export { uniqueSearchResults } from "./sources";
 export { BraveSearchProvider, PublicSearchProvider, RssSearchProvider, TavilySearchProvider } from "./providers";
