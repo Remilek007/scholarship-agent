@@ -15,28 +15,29 @@ export class DiscoveryEngine {
   async searchWithDiagnostics(profile: ApplicantProfile, queries = buildDiscoveryQueries(profile)) {
     const records: DiscoveryRecord[] = [];
     const providerErrors: DiscoveryDiagnostics["providerErrors"] = [];
+    const sourceResults = new Map<string, { records: number; errors: number }>();
     const onceSources = this.sources.filter(source => source.runOnce);
     const querySources = this.sources.filter(source => !source.runOnce);
-    const sourceFailures = new Map<string, string>();
+    const addSourceResult = (name: string, count: number, error = false) => { const current = sourceResults.get(name) ?? { records: 0, errors: 0 }; current.records += count; if (error) current.errors += 1; sourceResults.set(name, current); };
 
     const onceResults = await Promise.allSettled(onceSources.map(source => source.search("registry discovery")));
     onceResults.forEach((result, index) => {
       const source = onceSources[index];
-      if (result.status === "fulfilled") records.push(...result.value);
-      else { const message = errorMessage(result.reason); sourceFailures.set(source.name, message); providerErrors.push({ source: source.name, query: "registry discovery", error: message }); }
+      if (result.status === "fulfilled") { records.push(...result.value); addSourceResult(source.name, result.value.length); }
+      else { const message = errorMessage(result.reason); addSourceResult(source.name, 0, true); providerErrors.push({ source: source.name, query: "registry discovery", error: message }); }
     });
 
     for (const query of queries) {
       const results = await Promise.allSettled(querySources.map(source => source.search(query)));
       results.forEach((result, index) => {
         const source = querySources[index];
-        if (result.status === "fulfilled") records.push(...result.value);
-        else { const message = errorMessage(result.reason); sourceFailures.set(source.name, message); providerErrors.push({ source: source.name, query, error: message }); }
+        if (result.status === "fulfilled") { records.push(...result.value); addSourceResult(source.name, result.value.length); }
+        else { const message = errorMessage(result.reason); addSourceResult(source.name, 0, true); providerErrors.push({ source: source.name, query, error: message }); }
       });
     }
 
     const uniqueRecords = deduplicateRecords(records);
-    const sourceHealth = this.sources.map(source => ({ name: source.name, healthy: !sourceFailures.has(source.name) }));
+    const sourceHealth = await Promise.all(this.sources.map(async source => { try { return { name: source.name, healthy: await source.healthCheck() }; } catch { return { name: source.name, healthy: false }; } }));
     const diagnostics: DiscoveryDiagnostics = {
       queries: queries.length,
       sourcesConfigured: this.sources.length,
@@ -50,7 +51,8 @@ export class DiscoveryEngine {
       verified: 0,
       enrichmentErrors: 0,
       providerErrors,
-      sourceHealth
+      sourceHealth,
+      sourceResults: this.sources.map(source => ({ name: source.name, ...(sourceResults.get(source.name) ?? { records: 0, errors: 0 }) }))
     };
     return { records: rankDiscoveryRecords(uniqueRecords), diagnostics };
   }
@@ -58,10 +60,7 @@ export class DiscoveryEngine {
   async searchAndPersist(profile: ApplicantProfile, options: { deepEnrich?: boolean; limit?: number } = {}) {
     const searched = await this.searchWithDiagnostics(profile);
     const records = searched.records;
-    if (options.deepEnrich === false) {
-      const persistence = await persistDiscoveryRecords(records);
-      return { records, persistence, enriched: [], verified: 0, diagnostics: searched.diagnostics };
-    }
+    if (options.deepEnrich === false) { const persistence = await persistDiscoveryRecords(records); return { records, persistence, enriched: [], verified: 0, diagnostics: searched.diagnostics }; }
     const enrichmentLimit = Math.max(1, Math.min(options.limit ?? 40, 100));
     const enriched = await enrichDiscoveryRecords(profile, records, enrichmentLimit);
     const persistence = await persistEnrichedDiscoveryRecords(enriched);
@@ -70,7 +69,6 @@ export class DiscoveryEngine {
   async persist(records: DiscoveryRecord[]) { return persistDiscoveryRecords(records); }
   async health() { return Promise.all(this.sources.map(async source => ({ name: source.name, healthy: await source.healthCheck() }))); }
 }
-
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error ?? "Unknown error"); }
 function rankDiscoveryRecords(records: DiscoveryRecord[]): DiscoveryRecord[] { return records.map((record,index)=>({record,index,score:discoveryScore(record)})).sort((a,b)=>b.score-a.score||a.index-b.index).map(item=>item.record); }
 function discoveryScore(record: DiscoveryRecord): number { const value=`${record.title??""} ${record.snippet??""} ${record.url}`.toLowerCase(); let score=0; if(/forestry|forest|wildlife|conservation|biodiversity|natural resource|climate|remote sensing|gis/.test(value))score+=10; if(/funded|full scholarship|stipend|studentship|assistantship|fellowship/.test(value))score+=8; if(/msc|m\.sc|master/.test(value))score+=7; if(/research position|research project|graduate research|funded thesis/.test(value))score+=8; if(/nigeria|international students|all nationalities/.test(value))score+=3; return score; }
