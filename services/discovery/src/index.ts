@@ -56,3 +56,5 @@ export { SOURCE_REGISTRY, getEnabledSourceRegistry, getSourceRegistryUrls } from
 export type { DiscoverySourceDefinition } from "./source-registry";
 export { assessOpportunityQuality, deduplicateCandidates } from "./quality";
 export type { QualityAssessment } from "./quality";
+export { createDiscoveryScheduler, readScheduledProfile } from "./scheduler";
+export type { DiscoverySchedulerStatus } from "./scheduler";

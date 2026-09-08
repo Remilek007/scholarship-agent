@@ -1,18 +1,20 @@
 import cors from "cors";
 import express from "express";
 import { createScholarshipRepository } from "@scholarship-agent/database";
-import { buildDiscoveryQueries, prepareApplicationIntelligence, rankCandidates, scoreCandidate } from "@scholarship-agent/search";
+import { analyzeApplicantDocument, buildDiscoveryQueries, prepareApplicationIntelligence, rankCandidates, scoreCandidate } from "@scholarship-agent/search";
 import type { ApplicantProfile, ScholarshipCandidate, OpportunityType } from "@scholarship-agent/shared";
-import { createDiscoveryEngine, getEnabledSourceRegistry, verifySource } from "@scholarship-agent/discovery";
+import { createDiscoveryEngine, createDiscoveryScheduler, getEnabledSourceRegistry, readScheduledProfile, verifySource } from "@scholarship-agent/discovery";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
 const repository = process.env.DATABASE_URL ? createScholarshipRepository(process.env.DATABASE_URL) : undefined;
+const scheduledProfile = readScheduledProfile();
+const scheduler = scheduledProfile ? createDiscoveryScheduler(scheduledProfile) : undefined;
 
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => res.json({ ok: true, databaseConfigured: Boolean(repository), schedulerEnabled: Boolean(scheduler?.status().enabled) }));
 
 app.get("/api/discovery/health", async (_req, res) => {
   try {
@@ -21,6 +23,14 @@ app.get("/api/discovery/health", async (_req, res) => {
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Discovery health check failed" });
   }
+});
+
+app.get("/api/discovery/status", (_req, res) => res.json({ scheduler: scheduler?.status() ?? { enabled: false, running: false, intervalMinutes: null, reason: "DISCOVERY_PROFILE_JSON is not configured" } }));
+
+app.post("/api/discovery/run-scheduled", async (_req, res) => {
+  if (!scheduler) return res.status(503).json({ error: "Scheduled discovery is not configured. Set DISCOVERY_PROFILE_JSON and DISCOVERY_INTERVAL_MINUTES." });
+  try { res.json(await scheduler.run()); }
+  catch (error) { res.status(500).json({ error: error instanceof Error ? error.message : "Scheduled discovery failed" }); }
 });
 
 app.get("/api/discovery/sources", (_req, res) => {
@@ -58,6 +68,13 @@ app.post("/api/discovery/search", async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Discovery search failed" });
   }
+});
+
+app.post("/api/documents/analyze", (req, res) => {
+  const text = typeof req.body.text === "string" ? req.body.text : "";
+  const documentType = req.body.documentType === "cv" || req.body.documentType === "transcript" || req.body.documentType === "statement" || req.body.documentType === "unknown" ? req.body.documentType : undefined;
+  if (!text.trim()) return res.status(400).json({ error: "text is required" });
+  res.json(analyzeApplicantDocument(text, documentType));
 });
 
 app.post("/api/matches", (req, res) => {

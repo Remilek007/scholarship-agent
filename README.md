@@ -4,7 +4,7 @@ Forestry-first scholarship discovery and application assistant for funded Master
 
 ## Current pipeline
 
-`query planning → multi-provider discovery → deduplication → deep page extraction → funding classification → eligibility assessment → source verification → PostgreSQL snapshots → strict ranking → application requirements → factual answer preparation → human review`
+`query planning → multi-provider discovery → registry crawl → deduplication → structured/deep page extraction → funding classification → eligibility assessment → source verification → PostgreSQL persistence → strict ranking → application requirements → document-assisted profile intelligence → factual answer preparation → human review`
 
 The system is intentionally free-first and provider-neutral. Search adapters can be swapped without changing the scholarship pipeline.
 
@@ -14,38 +14,45 @@ The search taxonomy prioritizes Forestry, Forest Science, Forest Management, Sil
 
 ## Discovery
 
-Discovery can combine configured direct pages and RSS feeds with optional web-search providers. Tavily is supported as a free-tier provider; Brave Search is supported as an optional API provider. Providers are enabled only when their environment variables are present, so the core pipeline does not require a paid provider.
+Discovery combines configured direct pages and RSS feeds with optional web-search providers and a maintained registry of government, university, international, foundation and research sources. Registry crawling runs once per discovery cycle and follows relevant same-domain scholarship, funding, Master's and research links.
+
+Deep extraction now reads HTML metadata, canonical URLs, JSON-LD structured data, application links, deadlines and evidence snippets in addition to visible page text. Malformed structured data is non-fatal. Aggregators are treated as discovery sources; authoritative opportunity pages are verified before they qualify.
 
 ## Verification and ranking
 
-- Funding is classified from page evidence rather than provider labels alone.
-- Fully funded and substantially funded opportunities qualify; partial and unfunded opportunities are excluded from the qualifying pool.
-- Eligibility is treated as a gate rather than something a high relevance score can compensate for.
+- Funding is classified from evidence rather than provider labels alone.
+- Fully funded and substantially funded opportunities qualify; partial and unfunded opportunities are excluded from the strict qualifying pool.
+- Eligibility is a gate rather than something a high relevance score can compensate for.
 - Unknown eligibility remains review-only instead of being silently treated as eligible.
-- Deep extraction stores evidence snapshots so recommendations can be audited later.
-- Suspicious sources are not allowed to qualify through funding/relevance alone.
+- Source verification records redirects, official-domain signals, opportunity language and scam/payment warnings.
+- Research positions, studentships and assistantships are first-class opportunity types.
+- Duplicate opportunities are collapsed using title/provider/country identity with stronger evidence preferred.
 
 ## Application intelligence
 
-The application workspace now provides:
+The application workspace provides:
 
-- extracted requirements grouped by document/application category
-- readiness tracking for required items
-- manual requirement status controls: missing, ready, attached, waived
-- automatic preparation of factual answers from the applicant profile
-- an explicit question bank for missing personal, research, career, achievement, English-evidence and referee information
-- editable prepared answers with provenance shown as profile facts
-- application events for preparation and requirement changes
+- extracted application requirements and readiness tracking
+- manual requirement controls: missing, ready, attached, waived
+- profile-grounded factual answer preparation
+- explicit prompts for missing personal, research, career, achievement, English-evidence and referee information
+- editable prepared answers with provenance
+- application event history
+- document-assisted profile extraction from supplied CV/transcript/statement text
 - user-controlled final review and submission
 
-The system deliberately does not invent personal history, research claims, achievements, work experience, referee details or other application facts. Those become explicit inputs for later drafting.
+Document intelligence is deliberately conservative: it can suggest facts explicitly found in a supplied document, but it does not invent nationality, achievements, research claims, referees or experience. Suggested profile changes must be reviewed before being saved.
+
+## Scheduling
+
+The API includes an optional built-in scheduler. Set `DISCOVERY_INTERVAL_MINUTES` to a positive value and `DISCOVERY_PROFILE_JSON` to a JSON-encoded applicant profile. The scheduler prevents overlapping runs and exposes status through `GET /api/discovery/status`. It is disabled by default.
 
 ## Workspace
 
 - `apps/` — web dashboard and application workspace
 - `services/api/` — Express API
-- `services/discovery/` — discovery, deep extraction, verification and persistence orchestration
-- `packages/search/` — query generation, search providers, funding classification, eligibility, ranking and application intelligence
+- `services/discovery/` — discovery, deep extraction, verification, scheduling and persistence orchestration
+- `packages/search/` — query generation, search providers, funding classification, eligibility, ranking, application and document intelligence
 - `packages/database/` — PostgreSQL/Drizzle schema and repository
 - `packages/schemas/` — request validation
 - `packages/shared/` — shared domain types
@@ -55,12 +62,15 @@ The system deliberately does not invent personal history, research claims, achie
 
 - `GET /health`
 - `GET /api/discovery/health`
+- `GET /api/discovery/status`
 - `GET /api/discovery/sources`
 - `POST /api/discovery/plan`
 - `POST /api/discovery/search`
 - `POST /api/discovery/run` — deep enrichment is enabled by default
-- `POST /api/matches` — score supplied candidates
-- `POST /api/matches/top` — return up to 20 strict qualifying Master's matches
+- `POST /api/discovery/run-scheduled` — execute the configured scheduler profile immediately
+- `POST /api/documents/analyze` — analyze supplied document text and return reviewable profile facts
+- `POST /api/matches`
+- `POST /api/matches/top`
 - `GET /api/scholarships`
 - `GET /api/scholarships/:id`
 - `POST /api/scholarships/:id/verify`
@@ -70,23 +80,28 @@ The system deliberately does not invent personal history, research claims, achie
 - `PATCH /api/applications/:id`
 - `PATCH /api/applications/:id/requirements/:requirementId`
 - `PUT /api/applications/:id/answers`
-- `POST /api/applications/:id/prepare` — prepare profile-grounded factual answers and return missing-information prompts
+- `POST /api/applications/:id/prepare`
 - `POST /api/applications/:id/events`
 
 ## Environment
 
-Copy `.env.example` to `.env` and configure PostgreSQL. Discovery sources are optional until their adapters are configured.
+Copy `.env.example` to `.env` and configure PostgreSQL.
 
 Optional search credentials:
 
-- `TAVILY_API_KEY` — free-tier web search provider
-- `BRAVE_SEARCH_API_KEY` — optional Brave web search provider
-- `DISCOVERY_SEARCH_ENDPOINT` + `DISCOVERY_SEARCH_API_KEY` — custom provider adapter
-- `DISCOVERY_RSS_FEEDS` — comma-separated RSS/Atom feeds
-- `DISCOVERY_DIRECT_URLS` — comma-separated direct source URLs
+- `TAVILY_API_KEY`
+- `BRAVE_SEARCH_API_KEY`
+- `DISCOVERY_SEARCH_ENDPOINT` + `DISCOVERY_SEARCH_API_KEY`
+- `DISCOVERY_RSS_FEEDS`
+- `DISCOVERY_DIRECT_URLS`
+
+Optional scheduling:
+
+- `DISCOVERY_INTERVAL_MINUTES=0` disables the scheduler
+- `DISCOVERY_PROFILE_JSON` supplies the profile used by scheduled discovery
 
 Credentials and API keys must stay in environment variables and must never be committed.
 
-## Application safety
+## Safety boundary
 
-The application workspace is designed for human review. It can prepare requirements and profile-grounded answers, but final submission and applicant attestations remain user-controlled. CAPTCHA, MFA, access-control and other anti-abuse mechanisms are not bypassed.
+The application assistant prepares evidence, requirements and drafts, but applicant attestations and final submission remain user-controlled. CAPTCHA, MFA, access-control and other anti-abuse mechanisms are not bypassed.

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": {"dev": "tsx src/index.ts", "typecheck": "tsc --noEmit", "build": "tsc", "lint": "tsc --noEmit"},
+  "scripts": {"dev": "node --env-file=../../.env --import=tsx src/index.ts", "typecheck": "tsc --noEmit", "build": "tsc", "lint": "tsc --noEmit"},
   "dependencies": {
     "@scholarship-agent/database": "workspace:*",
     "@scholarship-agent/discovery": "workspace:*",
