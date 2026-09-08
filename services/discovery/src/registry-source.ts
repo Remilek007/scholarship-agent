@@ -14,10 +14,7 @@ export class RegistrySource implements ScholarshipSource {
   readonly name = "source-registry";
   readonly runOnce = true;
   private readonly definitions: DiscoverySourceDefinition[];
-
-  constructor(definitions: DiscoverySourceDefinition[]) {
-    this.definitions = definitions.filter((item) => item.enabledByDefault && item.urls.length);
-  }
+  constructor(definitions: DiscoverySourceDefinition[]) { this.definitions = definitions.filter(item => item.enabledByDefault && item.urls.length); }
 
   async search(query: string): Promise<DiscoveryRecord[]> {
     const records: DiscoveryRecord[] = [];
@@ -40,15 +37,14 @@ export class RegistrySource implements ScholarshipSource {
   }
 
   async healthCheck(): Promise<boolean> {
-    return this.definitions.some(definition => definition.urls.some(asyncCheck));
+    const checks = await Promise.all(this.definitions.flatMap(definition => definition.urls.map(asyncCheck)));
+    return checks.some(Boolean);
   }
 }
 
 async function asyncCheck(url: string): Promise<boolean> {
-  try {
-    const response = await fetch(url, { headers: { "user-agent": "ScholarshipAgent/0.1 (+opportunity-discovery)" }, signal: AbortSignal.timeout(8_000) });
-    return response.ok;
-  } catch { return false; }
+  try { const response = await fetch(url, { headers: { "user-agent": "ScholarshipAgent/0.1 (+opportunity-discovery)" }, signal: AbortSignal.timeout(8_000) }); return response.ok; }
+  catch { return false; }
 }
 
 async function crawlSource(definition: DiscoverySourceDefinition, seedUrl: string, query: string): Promise<DiscoveryRecord[]> {
@@ -56,9 +52,7 @@ async function crawlSource(definition: DiscoverySourceDefinition, seedUrl: strin
   const visited = new Set<string>();
   const queue = [seedUrl];
   const seed = new URL(seedUrl);
-  const sitemapUrls = await discoverSitemapUrls(seedUrl, seed.hostname);
-  queue.push(...sitemapUrls.slice(0, MAX_PAGES_PER_SOURCE * 2));
-
+  queue.push(...(await discoverSitemapUrls(seedUrl, seed.hostname)).slice(0, MAX_PAGES_PER_SOURCE * 2));
   while (queue.length && visited.size < MAX_PAGES_PER_SOURCE && records.length < MAX_RECORDS) {
     const current = queue.shift()!;
     const canonical = canonicalizeUrl(current);
@@ -72,8 +66,7 @@ async function crawlSource(definition: DiscoverySourceDefinition, seedUrl: strin
     if (USEFUL_TERMS.test(value) || OPPORTUNITY_TERMS.test(page.url)) records.push({ url: page.url, title, snippet: `${definition.name}: ${text.slice(0, 1800)}`, source: definition.name, discoveryMethod: "registry_crawl", query });
     for (const match of page.html.matchAll(LINK_PATTERN)) {
       if (visited.size + queue.length >= MAX_PAGES_PER_SOURCE * 2) break;
-      const href = match[1]?.trim();
-      const label = clean(match[2]) ?? "";
+      const href = match[1]?.trim(); const label = clean(match[2]) ?? "";
       if (!href) continue;
       let absolute: URL;
       try { absolute = new URL(href, page.url); } catch { continue; }
@@ -88,8 +81,7 @@ async function crawlSource(definition: DiscoverySourceDefinition, seedUrl: strin
 }
 
 async function discoverSitemapUrls(seedUrl: string, hostname: string): Promise<string[]> {
-  const origin = new URL(seedUrl).origin;
-  const urls: string[] = [];
+  const origin = new URL(seedUrl).origin; const urls: string[] = [];
   for (const sitemap of [`${origin}/sitemap.xml`, `${origin}/sitemap_index.xml`]) {
     try {
       const response = await fetch(sitemap, { headers: { "user-agent": "ScholarshipAgent/0.1 (+opportunity-discovery)" }, signal: AbortSignal.timeout(8_000) });
@@ -97,12 +89,8 @@ async function discoverSitemapUrls(seedUrl: string, hostname: string): Promise<s
       const xml = await response.text();
       for (const match of xml.matchAll(SITEMAP_LOC_PATTERN)) {
         const value = decodeEntities(clean(match[1]) ?? "");
-        try {
-          const url = new URL(value);
-          if (url.protocol !== "https:" || url.hostname !== hostname || !OPPORTUNITY_TERMS.test(url.pathname)) continue;
-          urls.push(url.toString());
-          if (urls.length >= MAX_SITEMAP_URLS) return [...new Set(urls.map(canonicalizeUrl))];
-        } catch { /* ignore malformed sitemap entries */ }
+        try { const url = new URL(value); if (url.protocol !== "https:" || url.hostname !== hostname || !OPPORTUNITY_TERMS.test(url.pathname)) continue; urls.push(url.toString()); if (urls.length >= MAX_SITEMAP_URLS) return [...new Set(urls.map(canonicalizeUrl))]; }
+        catch { /* ignore malformed sitemap entries */ }
       }
     } catch { /* sitemap is optional */ }
   }
