@@ -33,7 +33,7 @@ export async function enrichDiscoveryRecords(profile: ApplicantProfile, records:
           insuranceCovered: /health insurance|medical insurance/i.test(extraction.text)
         };
         const requirements = extraction.requirements.map(item => ({ name: item.name, required: item.required, sourceInstruction: item.sourceInstruction }));
-        candidate.fundingClass = evidenceFunding.classification === "fully_funded" ? "fully_funded" : classifyFunding(funding);
+        candidate.fundingClass = evidenceFunding.classification === "fully_funded" ? "fully_funded" : evidenceFunding.classification === "substantially_funded" ? "substantially_funded" : classifyFunding(funding);
         candidate.applicationUrl = extraction.applicationUrl ?? candidate.applicationUrl;
         candidate.deadline = parseDeadline(extraction.deadline) ?? candidate.deadline;
         candidate.requirements = requirements;
