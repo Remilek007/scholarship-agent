@@ -9,13 +9,10 @@ const MAX_RECORDS = 250;
 const MAX_PAGES_PER_SOURCE = 20;
 const MAX_SITEMAP_URLS = 80;
 
-/**
- * Discovery fallback that works without a paid search API. It uses source seeds,
- * sitemaps and shallow same-domain crawling. It is deliberately discovery-only:
- * every candidate is deep-enriched and verified before ranking.
- */
+/** Discovery fallback that works without a paid search API. */
 export class RegistrySource implements ScholarshipSource {
   readonly name = "source-registry";
+  readonly runOnce = true;
   private readonly definitions: DiscoverySourceDefinition[];
 
   constructor(definitions: DiscoverySourceDefinition[]) {
@@ -46,11 +43,7 @@ export class RegistrySource implements ScholarshipSource {
     for (const definition of this.definitions) {
       for (const url of definition.urls) {
         try {
-          const response = await fetch(url, {
-            method: "GET",
-            headers: { "user-agent": "ScholarshipAgent/0.1 (+opportunity-discovery)" },
-            signal: AbortSignal.timeout(8_000)
-          });
+          const response = await fetch(url, { method: "GET", headers: { "user-agent": "ScholarshipAgent/0.1 (+opportunity-discovery)" }, signal: AbortSignal.timeout(8_000) });
           if (response.ok) return true;
         } catch {
           // Try the next source.
@@ -86,14 +79,7 @@ async function crawlSource(definition: DiscoverySourceDefinition, seedUrl: strin
     const value = `${title} ${text.slice(0, 12000)} ${page.url}`;
 
     if (USEFUL_TERMS.test(value) || OPPORTUNITY_TERMS.test(page.url)) {
-      records.push({
-        url: page.url,
-        title,
-        snippet: `${definition.name}: ${text.slice(0, 1800)}`,
-        source: definition.name,
-        discoveryMethod: "registry_crawl",
-        query
-      });
+      records.push({ url: page.url, title, snippet: `${definition.name}: ${text.slice(0, 1800)}`, source: definition.name, discoveryMethod: "registry_crawl", query });
     }
 
     for (const match of page.html.matchAll(LINK_PATTERN)) {
@@ -102,11 +88,7 @@ async function crawlSource(definition: DiscoverySourceDefinition, seedUrl: strin
       const label = clean(match[2]) ?? "";
       if (!href) continue;
       let absolute: URL;
-      try {
-        absolute = new URL(href, page.url);
-      } catch {
-        continue;
-      }
+      try { absolute = new URL(href, page.url); } catch { continue; }
       if (absolute.protocol !== "https:" || absolute.hostname !== seed.hostname) continue;
       absolute.hash = "";
       const url = absolute.toString();
@@ -115,92 +97,43 @@ async function crawlSource(definition: DiscoverySourceDefinition, seedUrl: strin
       queue.push(url);
     }
   }
-
   return records;
 }
 
 async function discoverSitemapUrls(seedUrl: string, hostname: string): Promise<string[]> {
   const origin = new URL(seedUrl).origin;
-  const candidates = [`${origin}/sitemap.xml`, `${origin}/sitemap_index.xml`];
   const urls: string[] = [];
-  for (const sitemap of candidates) {
+  for (const sitemap of [`${origin}/sitemap.xml`, `${origin}/sitemap_index.xml`]) {
     try {
-      const response = await fetch(sitemap, {
-        headers: { "user-agent": "ScholarshipAgent/0.1 (+opportunity-discovery)" },
-        signal: AbortSignal.timeout(8_000)
-      });
+      const response = await fetch(sitemap, { headers: { "user-agent": "ScholarshipAgent/0.1 (+opportunity-discovery)" }, signal: AbortSignal.timeout(8_000) });
       if (!response.ok) continue;
       const xml = await response.text();
       for (const match of xml.matchAll(SITEMAP_LOC_PATTERN)) {
         const value = decodeEntities(clean(match[1]) ?? "");
         try {
           const url = new URL(value);
-          if (url.protocol !== "https:" || url.hostname !== hostname) continue;
-          if (!OPPORTUNITY_TERMS.test(url.pathname)) continue;
+          if (url.protocol !== "https:" || url.hostname !== hostname || !OPPORTUNITY_TERMS.test(url.pathname)) continue;
           urls.push(url.toString());
-          if (urls.length >= MAX_SITEMAP_URLS) return urls;
-        } catch {
-          // Ignore malformed sitemap locations.
-        }
+          if (urls.length >= MAX_SITEMAP_URLS) return [...new Set(urls.map(canonicalizeUrl))];
+        } catch { /* ignore malformed sitemap entries */ }
       }
-    } catch {
-      // Sitemaps are an optimization; seed crawling still proceeds.
-    }
+    } catch { /* sitemap is optional */ }
   }
   return [...new Set(urls.map(canonicalizeUrl))];
 }
 
 async function fetchPage(url: string): Promise<{ url: string; html: string } | undefined> {
   try {
-    const response = await fetch(url, {
-      headers: { "user-agent": "ScholarshipAgent/0.1 (+opportunity-discovery)", accept: "text/html,application/xhtml+xml" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(12_000)
-    });
+    const response = await fetch(url, { headers: { "user-agent": "ScholarshipAgent/0.1 (+opportunity-discovery)", accept: "text/html,application/xhtml+xml" }, redirect: "follow", signal: AbortSignal.timeout(12_000) });
     if (!response.ok) return undefined;
     const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml") && !url.endsWith(".xml")) return undefined;
+    if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) return undefined;
     return { url: response.url || url, html: (await response.text()).slice(0, 600_000) };
-  } catch {
-    return undefined;
-  }
+  } catch { return undefined; }
 }
 
-function extractTitle(html: string): string | undefined {
-  return clean(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]);
-}
-
-function visibleText(html: string): string {
-  return clean(html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<[^>]+>/g, " ")) ?? "";
-}
-
-function decodeEntities(value: string): string {
-  return value
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'");
-}
-
-function clean(value: string | undefined): string | undefined {
-  if (!value) return undefined;
-  return decodeEntities(value).replace(/\s+/g, " ").trim() || undefined;
-}
-
-function canonicalizeUrl(input: string): string {
-  try {
-    const url = new URL(input);
-    url.hash = "";
-    url.search = "";
-    url.hostname = url.hostname.toLowerCase();
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return input.trim().toLowerCase();
-  }
-}
+function extractTitle(html: string): string | undefined { return clean(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]); }
+function visibleText(html: string): string { return clean(html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<noscript[\s\S]*?<\/noscript>/gi, " ").replace(/<[^>]+>/g, " ")) ?? ""; }
+function decodeEntities(value: string): string { return value.replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">`).replace(/&quot;/gi, '"').replace(/&#39;/gi, "'"); }
+function clean(value: string | undefined): string | undefined { if (!value) return undefined; return decodeEntities(value).replace(/\s+/g, " ").trim() || undefined; }
+function canonicalizeUrl(input: string): string { try { const url = new URL(input); url.hash = ""; url.search = ""; url.hostname = url.hostname.toLowerCase(); return url.toString().replace(/\/$/, ""); } catch { return input.trim().toLowerCase(); } }
