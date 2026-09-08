@@ -6,8 +6,9 @@ const SITEMAP_LOC_PATTERN = /<loc[^>]*>([\s\S]*?)<\/loc>/gi;
 const USEFUL_TERMS = /(scholarship|funding|fellowship|studentship|assistantship|research|graduate|master|msc|application|admission|bursary|stipend|tuition|financial[- ]aid|award|students)/i;
 const OPPORTUNITY_TERMS = /(scholarship|funding|fellowship|studentship|assistantship|research[- ]?(position|project|opportunity)|graduate|master|msc|application|admission|bursary|stipend|tuition|financial[- ]aid|award|studentship)/i;
 const MAX_RECORDS = 250;
-const MAX_PAGES_PER_SOURCE = 20;
-const MAX_SITEMAP_URLS = 80;
+const MAX_PAGES_PER_SOURCE = 10;
+const MAX_SITEMAP_URLS = 40;
+const SOURCE_CONCURRENCY = 5;
 
 export class RegistrySource implements ScholarshipSource {
   readonly name = "source-registry";
@@ -21,11 +22,12 @@ export class RegistrySource implements ScholarshipSource {
   async search(query: string): Promise<DiscoveryRecord[]> {
     const records: DiscoveryRecord[] = [];
     const seenUrls = new Set<string>();
-    for (const definition of this.definitions) {
-      for (const seedUrl of definition.urls) {
-        if (records.length >= MAX_RECORDS) return records;
-        const sourceRecords = await crawlSource(definition, seedUrl, query);
-        for (const record of sourceRecords) {
+    for (let offset = 0; offset < this.definitions.length && records.length < MAX_RECORDS; offset += SOURCE_CONCURRENCY) {
+      const batch = this.definitions.slice(offset, offset + SOURCE_CONCURRENCY);
+      const results = await Promise.allSettled(batch.flatMap(definition => definition.urls.map(url => crawlSource(definition, url, query))));
+      for (const result of results) {
+        if (result.status !== "fulfilled") continue;
+        for (const record of result.value) {
           const key = canonicalizeUrl(record.url);
           if (seenUrls.has(key)) continue;
           seenUrls.add(key);
@@ -38,16 +40,15 @@ export class RegistrySource implements ScholarshipSource {
   }
 
   async healthCheck(): Promise<boolean> {
-    for (const definition of this.definitions) {
-      for (const url of definition.urls) {
-        try {
-          const response = await fetch(url, { headers: { "user-agent": "ScholarshipAgent/0.1 (+opportunity-discovery)" }, signal: AbortSignal.timeout(8_000) });
-          if (response.ok) return true;
-        } catch { /* try next source */ }
-      }
-    }
-    return false;
+    return this.definitions.some(definition => definition.urls.some(asyncCheck));
   }
+}
+
+async function asyncCheck(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, { headers: { "user-agent": "ScholarshipAgent/0.1 (+opportunity-discovery)" }, signal: AbortSignal.timeout(8_000) });
+    return response.ok;
+  } catch { return false; }
 }
 
 async function crawlSource(definition: DiscoverySourceDefinition, seedUrl: string, query: string): Promise<DiscoveryRecord[]> {
@@ -68,9 +69,7 @@ async function crawlSource(definition: DiscoverySourceDefinition, seedUrl: strin
     const title = extractTitle(page.html) ?? definition.name;
     const text = visibleText(page.html);
     const value = `${title} ${text.slice(0, 12000)} ${page.url}`;
-    if (USEFUL_TERMS.test(value) || OPPORTUNITY_TERMS.test(page.url)) {
-      records.push({ url: page.url, title, snippet: `${definition.name}: ${text.slice(0, 1800)}`, source: definition.name, discoveryMethod: "registry_crawl", query });
-    }
+    if (USEFUL_TERMS.test(value) || OPPORTUNITY_TERMS.test(page.url)) records.push({ url: page.url, title, snippet: `${definition.name}: ${text.slice(0, 1800)}`, source: definition.name, discoveryMethod: "registry_crawl", query });
     for (const match of page.html.matchAll(LINK_PATTERN)) {
       if (visited.size + queue.length >= MAX_PAGES_PER_SOURCE * 2) break;
       const href = match[1]?.trim();
@@ -81,8 +80,7 @@ async function crawlSource(definition: DiscoverySourceDefinition, seedUrl: strin
       if (absolute.protocol !== "https:" || absolute.hostname !== seed.hostname) continue;
       absolute.hash = "";
       const url = absolute.toString();
-      if (visited.has(canonicalizeUrl(url))) continue;
-      if (!OPPORTUNITY_TERMS.test(`${label} ${url}`)) continue;
+      if (visited.has(canonicalizeUrl(url)) || !OPPORTUNITY_TERMS.test(`${label} ${url}`)) continue;
       queue.push(url);
     }
   }
