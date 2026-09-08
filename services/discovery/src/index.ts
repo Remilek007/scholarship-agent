@@ -17,23 +17,26 @@ export class DiscoveryEngine {
     const providerErrors: DiscoveryDiagnostics["providerErrors"] = [];
     const onceSources = this.sources.filter(source => source.runOnce);
     const querySources = this.sources.filter(source => !source.runOnce);
+    const sourceFailures = new Map<string, string>();
 
     const onceResults = await Promise.allSettled(onceSources.map(source => source.search("registry discovery")));
     onceResults.forEach((result, index) => {
+      const source = onceSources[index];
       if (result.status === "fulfilled") records.push(...result.value);
-      else providerErrors.push({ source: onceSources[index].name, query: "registry discovery", error: errorMessage(result.reason) });
+      else { const message = errorMessage(result.reason); sourceFailures.set(source.name, message); providerErrors.push({ source: source.name, query: "registry discovery", error: message }); }
     });
 
     for (const query of queries) {
       const results = await Promise.allSettled(querySources.map(source => source.search(query)));
       results.forEach((result, index) => {
+        const source = querySources[index];
         if (result.status === "fulfilled") records.push(...result.value);
-        else providerErrors.push({ source: querySources[index].name, query, error: errorMessage(result.reason) });
+        else { const message = errorMessage(result.reason); sourceFailures.set(source.name, message); providerErrors.push({ source: source.name, query, error: message }); }
       });
     }
 
     const uniqueRecords = deduplicateRecords(records);
-    const sourceHealth = await this.health();
+    const sourceHealth = this.sources.map(source => ({ name: source.name, healthy: !sourceFailures.has(source.name) }));
     const diagnostics: DiscoveryDiagnostics = {
       queries: queries.length,
       sourcesConfigured: this.sources.length,
@@ -62,14 +65,7 @@ export class DiscoveryEngine {
     const enrichmentLimit = Math.max(1, Math.min(options.limit ?? 40, 100));
     const enriched = await enrichDiscoveryRecords(profile, records, enrichmentLimit);
     const persistence = await persistEnrichedDiscoveryRecords(enriched);
-    return {
-      records,
-      enriched: enriched.map(item => item.candidate),
-      enrichmentErrors: enriched.filter(item => item.enrichmentError).map(item => ({ url: item.record.url, error: item.enrichmentError })),
-      persistence,
-      verified: persistence.verified,
-      diagnostics: { ...searched.diagnostics, selectedForEnrichment: Math.min(records.length, enrichmentLimit), enriched: enriched.length, verified: persistence.verified, enrichmentErrors: enriched.filter(item => item.enrichmentError).length }
-    };
+    return { records, enriched: enriched.map(item => item.candidate), enrichmentErrors: enriched.filter(item => item.enrichmentError).map(item => ({ url: item.record.url, error: item.enrichmentError })), persistence, verified: persistence.verified, diagnostics: { ...searched.diagnostics, selectedForEnrichment: Math.min(records.length, enrichmentLimit), enriched: enriched.length, verified: persistence.verified, enrichmentErrors: enriched.filter(item => item.enrichmentError).length } };
   }
   async persist(records: DiscoveryRecord[]) { return persistDiscoveryRecords(records); }
   async health() { return Promise.all(this.sources.map(async source => ({ name: source.name, healthy: await source.healthCheck() }))); }
