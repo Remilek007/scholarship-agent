@@ -1,44 +1,7 @@
 export interface EvidenceItem { type: "funding" | "eligibility" | "academic" | "degree" | "deadline"; text: string; confidence: number; }
-
-const FUNDING_PATTERNS = [
-  /fully funded[^.]{0,240}/gi,
-  /full(?:y)?[- ]fund(?:ed|ing)[^.]{0,240}/gi,
-  /tuition[^.]{0,120}(?:waiver|coverage|covered)[^.]{0,160}/gi,
-  /(?:stipend|living allowance|maintenance allowance)[^.]{0,180}/gi,
-  /(?:travel|airfare|flight)[^.]{0,120}(?:allowance|grant|covered|support)[^.]{0,120}/gi,
-  /(?:health|medical)[^.]{0,120}(?:insurance|coverage)[^.]{0,120}/gi,
-  /studentship[^.]{0,180}/gi
-];
-const ELIGIBILITY_PATTERNS = [
-  /(?:international|overseas) students?[^.]{0,220}/gi,
-  /(?:all|any) nationalit(?:y|ies)[^.]{0,180}/gi,
-  /(?:Nigerian|Nigeria)[^.]{0,180}/gi,
-  /(?:minimum|at least)[^.]{0,80}(?:CGPA|GPA|grade|average)[^.]{0,100}/gi,
-  /(?:bachelor(?:'s)?|undergraduate) degree[^.]{0,180}/gi,
-  /master(?:'s)?[^.]{0,180}/gi,
-  /IELTS|TOEFL|English language[^.]{0,150}/gi
-];
-
-export function extractEvidence(text: string): EvidenceItem[] {
-  const evidence: EvidenceItem[] = [];
-  for (const pattern of FUNDING_PATTERNS) for (const match of text.matchAll(pattern)) evidence.push({ type: "funding", text: normalize(match[0]), confidence: 0.88 });
-  for (const pattern of ELIGIBILITY_PATTERNS) for (const match of text.matchAll(pattern)) {
-    const value = normalize(match[0]);
-    const type: EvidenceItem["type"] = /CGPA|GPA|grade|average/i.test(value) ? "academic" : /bachelor|master/i.test(value) ? "degree" : "eligibility";
-    evidence.push({ type, text: value, confidence: 0.82 });
-  }
-  return uniqueEvidence(evidence).slice(0, 80);
-}
-
-export function classifyFundingEvidence(evidence: EvidenceItem[]) {
-  const text = evidence.filter(item => item.type === "funding").map(item => item.text).join(" ");
-  const hasFull = /fully funded|full[- ]fund(?:ed|ing)|studentship/i.test(text);
-  const components = ["tuition", "stipend", "living allowance", "travel", "insurance"].filter(term => new RegExp(term, "i").test(text));
-  if (hasFull || components.length >= 3) return { classification: "fully_funded" as const, confidence: hasFull ? 0.94 : 0.84, components };
-  if (components.length >= 2) return { classification: "substantially_funded" as const, confidence: 0.78, components };
-  if (components.length === 1) return { classification: "partial" as const, confidence: 0.72, components };
-  return { classification: "unknown" as const, confidence: 0.35, components: [] };
-}
-
-function normalize(value: string) { return value.replace(/\s+/g, " ").trim(); }
-function uniqueEvidence(items: EvidenceItem[]) { const seen = new Set<string>(); return items.filter(item => { const key = `${item.type}:${item.text.toLowerCase()}`; if (seen.has(key)) return false; seen.add(key); return true; }); }
+const FUNDING_PATTERNS=[/fully funded[^.]{0,240}/gi,/full(?:y)?[- ]fund(?:ed|ing)[^.]{0,240}/gi,/all (?:expenses|costs) covered[^.]{0,200}/gi,/tuition[^.]{0,120}(?:waiver|coverage|covered)[^.]{0,160}/gi,/(?:stipend|living allowance|maintenance allowance)[^.]{0,180}/gi,/(?:travel|airfare|flight)[^.]{0,120}(?:allowance|grant|covered|support)[^.]{0,120}/gi,/(?:health|medical)[^.]{0,120}(?:insurance|coverage)[^.]{0,120}/gi,/studentship[^.]{0,180}/gi];
+const ELIGIBILITY_PATTERNS=[/(?:international|overseas) students?[^.]{0,220}/gi,/(?:all|any) nationalit(?:y|ies)[^.]{0,180}/gi,/(?:Nigerian|Nigeria)[^.]{0,180}/gi,/(?:minimum|at least)[^.]{0,80}(?:CGPA|GPA|grade|average)[^.]{0,100}/gi,/(?:bachelor(?:'s)?|undergraduate) degree[^.]{0,180}/gi,/master(?:'s)?[^.]{0,180}/gi,/IELTS|TOEFL|English language[^.]{0,150}/gi];
+export function extractEvidence(text:string):EvidenceItem[]{const evidence:EvidenceItem[]=[];for(const pattern of FUNDING_PATTERNS)for(const match of text.matchAll(pattern))evidence.push({type:"funding",text:normalize(match[0]),confidence:0.88});for(const pattern of ELIGIBILITY_PATTERNS)for(const match of text.matchAll(pattern)){const value=normalize(match[0]);const type:EvidenceItem["type"]=/CGPA|GPA|grade|average/i.test(value)?"academic":/bachelor|master/i.test(value)?"degree":"eligibility";evidence.push({type,text:value,confidence:0.82})}return uniqueEvidence(evidence).slice(0,80)}
+export function classifyFundingEvidence(evidence:EvidenceItem[]){const text=evidence.filter(item=>item.type==="funding").map(item=>item.text).join(" ");const hasFull=/fully funded|full[- ]fund(?:ed|ing)|all (?:expenses|costs) covered/i.test(text);const components=["tuition","stipend","living allowance","travel","insurance"].filter(term=>new RegExp(term,"i").test(text));if(hasFull)return{classification:"fully_funded" as const,confidence:0.94,components};if(components.length>=3)return{classification:"fully_funded" as const,confidence:0.84,components};if(components.length>=2)return{classification:"substantially_funded" as const,confidence:0.78,components};if(components.length===1)return{classification:"partial" as const,confidence:0.72,components};return{classification:"unknown" as const,confidence:0.35,components:[]}}
+function normalize(value:string){return value.replace(/\s+/g," ").trim()}
+function uniqueEvidence(items:EvidenceItem[]){const seen=new Set<string>();return items.filter(item=>{const key=`${item.type}:${item.text.toLowerCase()}`;if(seen.has(key))return false;seen.add(key);return true})}
