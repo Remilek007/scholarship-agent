@@ -17,12 +17,8 @@ app.use(express.json({ limit: "2mb" }));
 app.get("/health", (_req, res) => res.json({ ok: true, databaseConfigured: Boolean(repository), schedulerEnabled: Boolean(scheduler?.status().enabled) }));
 
 app.get("/api/discovery/health", async (_req, res) => {
-  try {
-    const engine = createDiscoveryEngine();
-    res.json(await engine.health());
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : "Discovery health check failed" });
-  }
+  try { res.json(await createDiscoveryEngine().health()); }
+  catch (error) { res.status(500).json({ error: error instanceof Error ? error.message : "Discovery health check failed" }); }
 });
 
 app.get("/api/discovery/status", (_req, res) => res.json({ scheduler: scheduler?.status() ?? { enabled: false, running: false, intervalMinutes: null, reason: "DISCOVERY_PROFILE_JSON is not configured" } }));
@@ -33,41 +29,29 @@ app.post("/api/discovery/run-scheduled", async (_req, res) => {
   catch (error) { res.status(500).json({ error: error instanceof Error ? error.message : "Scheduled discovery failed" }); }
 });
 
-app.get("/api/discovery/sources", (_req, res) => {
-  res.json(getEnabledSourceRegistry());
-});
+app.get("/api/discovery/sources", (_req, res) => res.json(getEnabledSourceRegistry()));
 
 app.post("/api/discovery/plan", (req, res) => {
-  try {
-    const profile = req.body.profile as ApplicantProfile;
-    res.json({ queries: buildDiscoveryQueries(profile) });
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Unable to build discovery plan" });
-  }
+  try { res.json({ queries: buildDiscoveryQueries(req.body.profile as ApplicantProfile) }); }
+  catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "Unable to build discovery plan" }); }
 });
 
 app.post("/api/discovery/run", async (req, res) => {
   try {
     const profile = req.body.profile as ApplicantProfile;
+    if (!profile?.nationality || !profile?.degreeLevel || !Array.isArray(profile?.targetFields)) return res.status(400).json({ error: "A complete applicant profile is required" });
     const deepEnrich = req.body.deepEnrich !== false;
     const limit = typeof req.body.limit === "number" ? Math.floor(req.body.limit) : undefined;
-    const engine = createDiscoveryEngine();
-    const result = await engine.searchAndPersist(profile, { deepEnrich, limit });
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : "Discovery run failed" });
-  }
+    res.json(await createDiscoveryEngine().searchAndPersist(profile, { deepEnrich, limit }));
+  } catch (error) { res.status(500).json({ error: error instanceof Error ? error.message : "Discovery run failed" }); }
 });
 
 app.post("/api/discovery/search", async (req, res) => {
   try {
     const profile = req.body.profile as ApplicantProfile;
-    const queries = Array.isArray(req.body.queries) ? req.body.queries.filter((item: unknown): item is string => typeof item === "string") : undefined;
-    const engine = createDiscoveryEngine();
-    res.json(await engine.search(profile, queries));
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : "Discovery search failed" });
-  }
+    const queries = Array.isArray(req.body.queries) ? req.body.queries.filter((item: unknown): item is string => typeof item === "string" && item.trim().length > 0) : undefined;
+    res.json(await createDiscoveryEngine().searchWithDiagnostics(profile, queries));
+  } catch (error) { res.status(500).json({ error: error instanceof Error ? error.message : "Discovery search failed" }); }
 });
 
 app.post("/api/documents/analyze", (req, res) => {
@@ -80,8 +64,7 @@ app.post("/api/documents/analyze", (req, res) => {
 app.post("/api/matches", (req, res) => {
   const profile = req.body.profile as ApplicantProfile;
   const candidates = Array.isArray(req.body.candidates) ? req.body.candidates as ScholarshipCandidate[] : [];
-  const matches = candidates.map((candidate) => ({ candidate, match: scoreCandidate(profile, candidate) }));
-  res.json(matches);
+  res.json(candidates.map((candidate) => ({ candidate, match: scoreCandidate(profile, candidate) })));
 });
 
 app.post("/api/matches/top", async (req, res) => {
@@ -90,24 +73,10 @@ app.post("/api/matches/top", async (req, res) => {
     const profile = req.body.profile as ApplicantProfile;
     const limit = typeof req.body.limit === "number" ? Math.min(Math.max(Math.floor(req.body.limit), 1), 20) : 10;
     const rows = await repository.listScholarships({ degreeLevel: "masters", limit: 200 });
-    const candidates: ScholarshipCandidate[] = rows.map((row) => ({
-      title: row.title,
-      provider: row.provider ?? undefined,
-      university: row.university ?? undefined,
-      country: row.country ?? undefined,
-      degreeLevel: isDegreeLevel(row.degreeLevel) ? row.degreeLevel : undefined,
-      opportunityType: isOpportunityType(row.opportunityType) ? row.opportunityType : undefined,
-      fields: Array.isArray(row.fields) ? row.fields : [],
-      sourceUrl: row.sourceUrl,
-      applicationUrl: row.applicationUrl ?? undefined,
-      fundingClass: isFundingClass(row.fundingClass) ? row.fundingClass : "unknown",
-      deadline: row.deadline ? row.deadline.toISOString() : undefined
-    }));
+    const candidates: ScholarshipCandidate[] = rows.map((row) => ({ title: row.title, provider: row.provider ?? undefined, university: row.university ?? undefined, country: row.country ?? undefined, degreeLevel: isDegreeLevel(row.degreeLevel) ? row.degreeLevel : undefined, opportunityType: isOpportunityType(row.opportunityType) ? row.opportunityType : undefined, fields: Array.isArray(row.fields) ? row.fields : [], sourceUrl: row.sourceUrl, applicationUrl: row.applicationUrl ?? undefined, fundingClass: isFundingClass(row.fundingClass) ? row.fundingClass : "unknown", deadline: row.deadline ? row.deadline.toISOString() : undefined }));
     const ranked = rankCandidates(profile, candidates).filter((candidate) => candidate.eligibilityGate === "pass").slice(0, limit);
     res.json({ profile, count: ranked.length, matches: ranked });
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : "Unable to rank scholarship matches" });
-  }
+  } catch (error) { res.status(500).json({ error: error instanceof Error ? error.message : "Unable to rank scholarship matches" }); }
 });
 
 app.get("/api/scholarships", async (req, res) => {
@@ -143,110 +112,19 @@ app.post("/api/applications", async (req, res) => {
   res.json(await repository.createApplication(scholarshipId));
 });
 
-app.get("/api/applications", async (_req, res) => {
-  if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
-  res.json(await repository.listApplications());
-});
+app.get("/api/applications", async (_req, res) => { if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" }); res.json(await repository.listApplications()); });
+app.get("/api/applications/:id", async (req, res) => { if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" }); const application = await repository.getApplication(req.params.id); if (!application) return res.status(404).json({ error: "Application not found" }); res.json(application); });
+app.patch("/api/applications/:id", async (req, res) => { if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" }); const patch: { status?: string; aiPolicy?: string; notes?: string } = {}; if (typeof req.body.status === "string") patch.status = req.body.status; const aiPolicy = parseAiPolicy(req.body.aiPolicy); if (aiPolicy) patch.aiPolicy = aiPolicy; if (typeof req.body.notes === "string") patch.notes = req.body.notes; const updated = await repository.updateApplication(req.params.id, patch); if (!updated) return res.status(404).json({ error: "Application not found" }); res.json(updated); });
+app.put("/api/applications/:id/requirements", async (req, res) => { if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" }); if (!Array.isArray(req.body.requirements)) return res.status(400).json({ error: "requirements must be an array" }); const requirements = req.body.requirements.filter((item: unknown): item is Record<string, unknown> => typeof item === "object" && item !== null).map((item: Record<string, unknown>) => ({ name: typeof item.name === "string" ? item.name.trim() : "", required: item.required !== false, status: typeof item.status === "string" ? item.status : "missing", sourceInstruction: typeof item.sourceInstruction === "string" ? item.sourceInstruction : undefined })).filter((item: { name: string }) => Boolean(item.name)); res.json(await repository.replaceRequirements(req.params.id, requirements)); });
+app.patch("/api/applications/:id/requirements/:requirementId", async (req, res) => { if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" }); const status = parseRequirementStatus(req.body.status); if (!status) return res.status(400).json({ error: "status must be missing, ready, attached, or waived" }); const application = await repository.getApplication(req.params.id); if (!application) return res.status(404).json({ error: "Application not found" }); if (!application.requirements.some((item: { id: string }) => item.id === req.params.requirementId)) return res.status(404).json({ error: "Requirement not found" }); const updated = await repository.updateRequirementStatus(req.params.requirementId, status); if (!updated) return res.status(404).json({ error: "Requirement not found" }); res.json(updated); });
+app.put("/api/applications/:id/answers", async (req, res) => { if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" }); const field = typeof req.body.field === "string" ? req.body.field.trim() : ""; const answer = typeof req.body.answer === "string" ? req.body.answer : ""; if (!field) return res.status(400).json({ error: "field is required" }); res.json(await repository.upsertAnswer(req.params.id, field, answer, parseAiPolicy(req.body.aiPolicy) ?? "unknown", req.body.reviewed === true)); });
+app.post("/api/applications/:id/events", async (req, res) => { if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" }); const eventType = typeof req.body.eventType === "string" ? req.body.eventType : ""; if (!eventType) return res.status(400).json({ error: "eventType is required" }); res.json(await repository.recordApplicationEvent(req.params.id, eventType, typeof req.body.details === "object" && req.body.details !== null ? req.body.details : {})); });
+app.post("/api/applications/:id/prepare", async (req, res) => { if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" }); const application = await repository.getApplication(req.params.id); if (!application) return res.status(404).json({ error: "Application not found" }); const profile = req.body.profile as ApplicantProfile | undefined; if (!profile?.nationality || !profile.degreeLevel || !Array.isArray(profile.targetFields)) return res.status(400).json({ error: "A complete applicant profile is required for preparation" }); const preparation = prepareApplicationIntelligence(profile, application); for (const answer of preparation.factualAnswers) await repository.upsertAnswer(application.id, answer.field, answer.answer, answer.aiPolicy, false); const updated = await repository.getApplication(application.id); res.json({ application: updated, preparation }); });
 
-app.get("/api/applications/:id", async (req, res) => {
-  if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
-  const application = await repository.getApplication(req.params.id);
-  if (!application) return res.status(404).json({ error: "Application not found" });
-  res.json(application);
-});
+function isDegreeLevel(value: unknown): value is "bachelors" | "masters" | "phd" { return value === "bachelors" || value === "masters" || value === "phd"; }
+function isFundingClass(value: unknown): value is "fully_funded" | "substantially_funded" | "partial" | "unfunded" | "unknown" { return value === "fully_funded" || value === "substantially_funded" || value === "partial" || value === "unfunded" || value === "unknown"; }
+function isOpportunityType(value: unknown): value is OpportunityType { return value === "scholarship" || value === "studentship" || value === "research_position" || value === "assistantship" || value === "fellowship" || value === "grant" || value === "other"; }
+function parseAiPolicy(value: unknown): "limited" | "assisted" | "unknown" | undefined { return value === "limited" || value === "assisted" || value === "unknown" ? value : undefined; }
+function parseRequirementStatus(value: unknown): "missing" | "ready" | "attached" | "waived" | undefined { return value === "missing" || value === "ready" || value === "attached" || value === "waived" ? value : undefined; }
 
-app.patch("/api/applications/:id", async (req, res) => {
-  if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
-  const patch: { status?: string; aiPolicy?: string; notes?: string } = {};
-  if (typeof req.body.status === "string") patch.status = req.body.status;
-  const aiPolicy = parseAiPolicy(req.body.aiPolicy);
-  if (aiPolicy) patch.aiPolicy = aiPolicy;
-  if (typeof req.body.notes === "string") patch.notes = req.body.notes;
-  const updated = await repository.updateApplication(req.params.id, patch);
-  if (!updated) return res.status(404).json({ error: "Application not found" });
-  res.json(updated);
-});
-
-app.put("/api/applications/:id/requirements", async (req, res) => {
-  if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
-  if (!Array.isArray(req.body.requirements)) return res.status(400).json({ error: "requirements must be an array" });
-  const requirements = req.body.requirements
-    .filter((item: unknown): item is Record<string, unknown> => typeof item === "object" && item !== null)
-    .map((item: Record<string, unknown>) => ({
-      name: typeof item.name === "string" ? item.name.trim() : "",
-      required: item.required !== false,
-      status: typeof item.status === "string" ? item.status : "missing",
-      sourceInstruction: typeof item.sourceInstruction === "string" ? item.sourceInstruction : undefined
-    }))
-    .filter((item: { name: string }) => Boolean(item.name));
-  res.json(await repository.replaceRequirements(req.params.id, requirements));
-});
-
-app.patch("/api/applications/:id/requirements/:requirementId", async (req, res) => {
-  if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
-  const status = parseRequirementStatus(req.body.status);
-  if (!status) return res.status(400).json({ error: "status must be missing, ready, attached, or waived" });
-  const application = await repository.getApplication(req.params.id);
-  if (!application) return res.status(404).json({ error: "Application not found" });
-  const requirement = application.requirements.find((item: { id: string }) => item.id === req.params.requirementId);
-  if (!requirement) return res.status(404).json({ error: "Requirement not found" });
-  const updated = await repository.updateRequirementStatus(req.params.requirementId, status);
-  if (!updated) return res.status(404).json({ error: "Requirement not found" });
-  res.json(updated);
-});
-
-app.put("/api/applications/:id/answers", async (req, res) => {
-  if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
-  const field = typeof req.body.field === "string" ? req.body.field.trim() : "";
-  const answer = typeof req.body.answer === "string" ? req.body.answer : "";
-  if (!field) return res.status(400).json({ error: "field is required" });
-  res.json(await repository.upsertAnswer(req.params.id, field, answer, parseAiPolicy(req.body.aiPolicy) ?? "unknown", req.body.reviewed === true));
-});
-
-app.post("/api/applications/:id/events", async (req, res) => {
-  if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
-  const eventType = typeof req.body.eventType === "string" ? req.body.eventType : "";
-  if (!eventType) return res.status(400).json({ error: "eventType is required" });
-  res.json(await repository.recordApplicationEvent(req.params.id, eventType, typeof req.body.details === "object" && req.body.details !== null ? req.body.details : {}));
-});
-
-app.post("/api/applications/:id/prepare", async (req, res) => {
-  if (!repository) return res.status(503).json({ error: "DATABASE_URL not configured" });
-  const application = await repository.getApplication(req.params.id);
-  if (!application) return res.status(404).json({ error: "Application not found" });
-  const profile = req.body.profile as ApplicantProfile | undefined;
-  if (!profile?.nationality || !profile.degreeLevel || !Array.isArray(profile.targetFields)) {
-    return res.status(400).json({ error: "A complete applicant profile is required for preparation" });
-  }
-  const preparation = prepareApplicationIntelligence(profile);
-  for (const draft of preparation.factualAnswers) {
-    await repository.upsertAnswer(req.params.id, draft.field, draft.answer, draft.aiPolicy, draft.reviewed);
-  }
-  await repository.updateApplication(req.params.id, { status: "preparing" });
-  await repository.recordApplicationEvent(req.params.id, "preparation_started", { userRequested: true, factualAnswersPrepared: preparation.factualAnswers.length, questions: preparation.questions.length });
-  const updated = await repository.getApplication(req.params.id);
-  res.json({ application: updated, preparation, finalSubmissionRequiresUserApproval: true });
-});
-
-function parseAiPolicy(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  return ["unknown", "allowed", "limited", "restricted", "prohibited"].includes(value) ? value : undefined;
-}
-
-function parseRequirementStatus(value: unknown): "missing" | "ready" | "attached" | "waived" | undefined {
-  return value === "missing" || value === "ready" || value === "attached" || value === "waived" ? value : undefined;
-}
-
-function isOpportunityType(value: string | null | undefined): value is OpportunityType {
-  return value === "scholarship" || value === "studentship" || value === "research_position" || value === "assistantship" || value === "fellowship" || value === "grant" || value === "other";
-}
-
-function isDegreeLevel(value: string | null | undefined): value is ScholarshipCandidate["degreeLevel"] {
-  return value === "masters" || value === "phd" || value === "undergraduate" || value === "other";
-}
-
-function isFundingClass(value: string): value is ScholarshipCandidate["fundingClass"] {
-  return value === "fully_funded" || value === "substantially_funded" || value === "partial" || value === "unfunded" || value === "unknown";
-}
-
-app.listen(port, () => console.log(`Scholarship Agent API listening on http://localhost:${port}`));
+app.listen(port, () => console.log(`Scholarship Agent API listening on ${port}`));
