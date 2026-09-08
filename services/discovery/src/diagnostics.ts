@@ -12,4 +12,5 @@ export interface DiscoveryDiagnostics {
   enrichmentErrors: number;
   providerErrors: Array<{ source: string; query: string; error: string }>;
   sourceHealth: Array<{ name: string; healthy: boolean }>;
+  sourceResults: Array<{ name: string; records: number; errors: number }>;
 }
