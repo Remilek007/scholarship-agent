@@ -2,28 +2,14 @@ import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { createDatabase } from "./client";
 import { applicationAnswers, applicationEvents, applicationRequirements, applications, discoveryRecords, scholarshipFunding, scholarshipSnapshots, scholarshipSources, scholarships } from "./schema";
 
-export interface ScholarshipEligibilityEvidence {
-  internationalStudents?: boolean;
-  eligibleNationalities?: string[];
-  excludedNationalities?: string[];
-  minimumAcademicScore?: number;
-  academicScale?: number;
-  text?: string;
-}
-
-export interface ScholarshipRequirementEvidence {
-  name: string;
-  required: boolean;
-  sourceInstruction?: string;
-}
-
+export interface ScholarshipEligibilityEvidence { internationalStudents?: boolean; eligibleNationalities?: string[]; excludedNationalities?: string[]; minimumAcademicScore?: number; academicScale?: number; text?: string; }
+export interface ScholarshipRequirementEvidence { name: string; required: boolean; sourceInstruction?: string; }
 export interface ScholarshipPersistenceInput {
   canonicalKey: string; title: string; provider?: string; university?: string; country?: string; degreeLevel?: string; opportunityType?: string; fields: string[];
   sourceUrl: string; applicationUrl?: string; fundingClass: string; deadline?: string; eligibility?: ScholarshipEligibilityEvidence;
   requirements?: ScholarshipRequirementEvidence[];
   evidence?: { title: string; snippet?: string; sourceUrl: string; funding?: { tuitionCovered?: boolean; stipendMentioned?: boolean; accommodationCovered?: boolean; travelCovered?: boolean; insuranceCovered?: boolean; text: string }; eligibility?: ScholarshipEligibilityEvidence; requirements?: ScholarshipRequirementEvidence[] };
 }
-
 export interface SourceVerificationInput { sourceUrl: string; finalUrl?: string; status: string; trustLevel: number; officialSource: boolean; title?: string; evidence: string[]; warnings: string[]; checkedAt: string; }
 export interface ApplicationRequirementInput { name: string; required?: boolean; status?: string; sourceInstruction?: string; }
 
@@ -40,6 +26,7 @@ export function createScholarshipRepository(databaseUrl?: string) {
       return scholarship.id;
     },
     async recordDiscovery(input: { url: string; title?: string; source: string; discoveryMethod: string; query?: string }) { await db.insert(discoveryRecords).values({ url: input.url, title: input.title, source: input.source, discoveryMethod: input.discoveryMethod, query: input.query, status: "processed" }); },
+    async listDiscoveryRecords(limit = 200) { return db.select().from(discoveryRecords).orderBy(desc(discoveryRecords.discoveredAt)).limit(Math.min(Math.max(limit, 1), 500)); },
     async recordVerification(scholarshipId: string, verification: SourceVerificationInput) {
       const now = new Date(verification.checkedAt);
       await db.update(scholarships).set({ trustLevel: Math.max(1, Math.min(5, verification.trustLevel)), updatedAt: now }).where(eq(scholarships.id, scholarshipId));
@@ -61,24 +48,18 @@ export function createScholarshipRepository(databaseUrl?: string) {
     },
     async getLatestRequirements(scholarshipId: string): Promise<ScholarshipRequirementEvidence[]> {
       const rows = await db.select({ evidence: scholarshipSnapshots.evidence }).from(scholarshipSnapshots).where(eq(scholarshipSnapshots.scholarshipId, scholarshipId)).orderBy(desc(scholarshipSnapshots.capturedAt));
-      for (const row of rows) {
-        const evidence = row.evidence as { requirements?: ScholarshipRequirementEvidence[] } | null;
-        if (Array.isArray(evidence?.requirements) && evidence.requirements.length) return evidence.requirements;
-      }
+      for (const row of rows) { const evidence = row.evidence as { requirements?: ScholarshipRequirementEvidence[] } | null; if (Array.isArray(evidence?.requirements) && evidence.requirements.length) return evidence.requirements; }
       return [];
     },
     async listScholarships(filters: { fundingClass?: string; degreeLevel?: string; country?: string; opportunityType?: string; minTrustLevel?: number; limit?: number } = {}) {
       const conditions = []; if (filters.fundingClass) conditions.push(eq(scholarships.fundingClass, filters.fundingClass)); if (filters.degreeLevel) conditions.push(eq(scholarships.degreeLevel, filters.degreeLevel)); if (filters.country) conditions.push(eq(scholarships.country, filters.country)); if (filters.opportunityType) conditions.push(eq(scholarships.opportunityType, filters.opportunityType)); if (filters.minTrustLevel !== undefined) conditions.push(gte(scholarships.trustLevel, filters.minTrustLevel));
-      return db.select().from(scholarships).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(scholarships.updatedAt)).limit(Math.min(Math.max(filters.limit ?? 50, 1), 200));
+      return db.select().from(scholarships).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(scholarships.updatedAt)).limit(Math.min(Math.max(filters.limit ?? 50, 1), 500));
     },
     async createApplication(scholarshipId: string, aiPolicy = "unknown", notes?: string) {
       const [application] = await db.insert(applications).values({ scholarshipId, aiPolicy, notes, status: "discovered", updatedAt: new Date() }).onConflictDoUpdate({ target: applications.scholarshipId, set: { aiPolicy, notes, updatedAt: new Date() } }).returning();
       if (!application) throw new Error("Application creation failed");
       const requirements = await this.getLatestRequirements(scholarshipId);
-      if (requirements.length) {
-        await db.delete(applicationRequirements).where(eq(applicationRequirements.applicationId, application.id));
-        await db.insert(applicationRequirements).values(requirements.map((item) => ({ applicationId: application.id, name: item.name, required: item.required, status: "missing", sourceInstruction: item.sourceInstruction })));
-      }
+      if (requirements.length) { await db.delete(applicationRequirements).where(eq(applicationRequirements.applicationId, application.id)); await db.insert(applicationRequirements).values(requirements.map((item) => ({ applicationId: application.id, name: item.name, required: item.required, status: "missing", sourceInstruction: item.sourceInstruction }))); }
       await db.insert(applicationEvents).values({ applicationId: application.id, eventType: "created", details: { requirementsHydrated: requirements.length } });
       return this.getApplication(application.id);
     },
@@ -90,13 +71,7 @@ export function createScholarshipRepository(databaseUrl?: string) {
     async listApplications(limit = 50) { return db.select().from(applications).orderBy(desc(applications.updatedAt)).limit(Math.min(Math.max(limit, 1), 200)); },
     async updateApplication(id: string, input: { status?: string; aiPolicy?: string; notes?: string }) { const [application] = await db.update(applications).set({ ...input, updatedAt: new Date() }).where(eq(applications.id, id)).returning(); return application ? this.getApplication(application.id) : undefined; },
     async replaceRequirements(applicationId: string, requirements: ApplicationRequirementInput[]) { await db.delete(applicationRequirements).where(eq(applicationRequirements.applicationId, applicationId)); if (requirements.length) await db.insert(applicationRequirements).values(requirements.map((item) => ({ applicationId, name: item.name, required: item.required ?? true, status: item.status ?? "missing", sourceInstruction: item.sourceInstruction }))); return this.getApplication(applicationId); },
-    async updateRequirementStatus(requirementId: string, status: "missing" | "ready" | "attached" | "waived") {
-      const [requirement] = await db.update(applicationRequirements).set({ status }).where(eq(applicationRequirements.id, requirementId)).returning();
-      if (!requirement) return undefined;
-      await db.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, requirement.applicationId));
-      await db.insert(applicationEvents).values({ applicationId: requirement.applicationId, eventType: "document_attached", details: { requirementId, status } });
-      return this.getApplication(requirement.applicationId);
-    },
+    async updateRequirementStatus(requirementId: string, status: "missing" | "ready" | "attached" | "waived") { const [requirement] = await db.update(applicationRequirements).set({ status }).where(eq(applicationRequirements.id, requirementId)).returning(); if (!requirement) return undefined; await db.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, requirement.applicationId)); await db.insert(applicationEvents).values({ applicationId: requirement.applicationId, eventType: "document_attached", details: { requirementId, status } }); return this.getApplication(requirement.applicationId); },
     async upsertAnswer(applicationId: string, field: string, answer: string, aiPolicy = "unknown", reviewed = false) { const [saved] = await db.insert(applicationAnswers).values({ applicationId, field, answer, aiPolicy, reviewed, updatedAt: new Date() }).onConflictDoUpdate({ target: [applicationAnswers.applicationId, applicationAnswers.field], set: { answer, aiPolicy, reviewed, updatedAt: new Date() } }).returning(); return saved; },
     async recordApplicationEvent(applicationId: string, eventType: string, details: Record<string, unknown> = {}) { const [event] = await db.insert(applicationEvents).values({ applicationId, eventType, details }).returning(); await db.update(applications).set({ updatedAt: new Date() }).where(eq(applications.id, applicationId)); return event; }
   };
