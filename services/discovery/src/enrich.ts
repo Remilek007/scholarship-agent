@@ -17,7 +17,7 @@ export async function enrichDiscoveryRecords(profile:ApplicantProfile,records:Di
   if(index<MAX_SECONDARY_RECORDS) extraction=await expandExtraction(extraction);
   const enrichedRecord:DiscoveryRecord={...record,url:extraction.finalUrl||record.url,title:extraction.title||record.title,snippet:[record.snippet,extraction.text].filter(Boolean).join(" ").slice(0,30000)};
   const candidate=normalizeDiscoveryRecord(enrichedRecord);const funding:FundingEvidence={text:extraction.text,tuitionCovered:/full tuition|100% tuition|tuition (fee )?waiver|fees fully covered|fees covered in full|tuition and fees covered in full/i.test(extraction.text),stipendMentioned:/stipend|living allowance|maintenance allowance|monthly allowance|living costs covered|bursary|funding package/i.test(extraction.text),accommodationCovered:/accommodation|housing|residential costs/i.test(extraction.text),travelCovered:/travel (grant|allowance|costs)|flight|airfare|relocation/i.test(extraction.text),insuranceCovered:/health insurance|medical insurance/i.test(extraction.text)};
-  const requirements:ScholarshipRequirement[]=extraction.requirements.map(item=>({name:item.name,required:item.required,category:item.category,details:item.details,conditional:item.conditional,sourceInstruction:item.sourceInstruction,evidence:item.evidence}));
+  const requirements=extraction.requirements.map(item=>({name:item.name,required:item.required,category:item.category,details:item.details,conditional:item.conditional,sourceInstruction:item.sourceInstruction,evidence:item.evidence}));
   candidate.fundingClass=classifyFunding(funding);candidate.applicationUrl=extraction.applicationUrl??candidate.applicationUrl;candidate.deadline=parseDeadline(extraction.deadline)??candidate.deadline;candidate.requirements=requirements;candidate.eligibility={...candidate.eligibility,...extractEligibility(extraction.text)};candidate.evidence={...candidate.evidence,sourceUrl:extraction.finalUrl,funding,eligibility:candidate.eligibility,requirements,snippet:extraction.text.slice(0,8000)};
   const eligibility=assessEligibility(profile,candidate);const verification=await verifySource(extraction.finalUrl);if(verification.status==="suspicious")candidate.fundingClass="unknown";
   results[index]={record:enrichedRecord,candidate,extraction,verification,enrichmentError:eligibility.status==="not_eligible"?"Eligibility assessment found a hard exclusion":undefined};
@@ -25,7 +25,7 @@ export async function enrichDiscoveryRecords(profile:ApplicantProfile,records:Di
  await Promise.all(Array.from({length:Math.min(CONCURRENCY,selected.length)},()=>worker()));return results;
 }
 
-async function expandExtraction(primary:DeepExtractionResult):Promise<DeepExtractionResult>{
+export async function expandExtraction(primary:DeepExtractionResult):Promise<DeepExtractionResult>{
  const hostname=hostOf(primary.finalUrl);if(!hostname)return primary;
  const links=primary.links.filter(link=>hostOf(link.url)===hostname&&LINK_TERMS.test(`${link.label} ${link.url}`)).slice(0,MAX_SECONDARY_LINKS);
  if(!links.length)return primary;
