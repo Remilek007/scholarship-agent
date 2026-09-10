@@ -50,7 +50,21 @@ export type RequirementCategory = "identity"|"academic"|"language"|"admission"|"
 export interface ScholarshipRequirement { name:string; required:boolean; category?:RequirementCategory; details?:string; conditional?:string; sourceInstruction?:string; evidence?:string; }
 
 export interface ScholarshipCandidate { title:string; provider?:string; university?:string; country?:string; degreeLevel?:DegreeLevel; opportunityType?:OpportunityType; fields:string[]; sourceUrl:string; applicationUrl?:string; fundingClass:FundingClass; deadline?:string; eligibility?:ScholarshipEligibilityEvidence; requirements?:ScholarshipRequirement[]; }
-export interface MatchResult { eligibility:EligibilityStatus; fieldScore:number; fundingScore:number; academicScore:number; profileScore:number; deadlineScore:number; confidence:number; overallScore:number; reasons:string[]; }
+export interface MatchResult {
+  eligibility:EligibilityStatus;
+  fieldScore:number;
+  researchScore:number;
+  skillScore:number;
+  opportunityScore:number;
+  fundingScore:number;
+  academicScore:number;
+  profileScore:number;
+  deadlineScore:number;
+  evidenceConfidence:number;
+  confidence:number;
+  overallScore:number;
+  reasons:string[];
+}
 
 export interface ApplicationWorkspace { id:string; scholarshipId:string; status:ApplicationStatus; aiPolicy?:"allowed"|"limited"|"prohibited"|"unknown"; notes?:string; }
 export interface ApplicationRequirement { id:string; applicationId:string; name:string; required:boolean; status:"missing"|"ready"|"attached"|"waived"; sourceInstruction?:string; }
