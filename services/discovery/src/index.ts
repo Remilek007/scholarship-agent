@@ -23,7 +23,7 @@ export class DiscoveryEngine {
   await Promise.all(Array.from({length:Math.min(QUERY_CONCURRENCY,Math.max(1,queries.length))},runQueryWorker));
   const uniqueRecords=deduplicateRecords(records);
   // Search attempts already provide health evidence. Avoid an extra provider request per source.
-  const sourceHealth=this.sources.map(source=>{const stats=sourceResults.get(source.name);return{name:source.name,healthy:Boolean(stats)&&stats.errors===0};});
+  const sourceHealth=this.sources.map(source=>{const stats=sourceResults.get(source.name);return{name:source.name,healthy:stats !== undefined && stats.errors===0};});
   const diagnostics:DiscoveryDiagnostics={queries:queries.length,sourcesConfigured:this.sources.length,sourcesHealthy:sourceHealth.filter(item=>item.healthy).length,registrySources:onceSources.length,providerSources:querySources.length,rawRecords:records.length,uniqueRecords:uniqueRecords.length,selectedForEnrichment:0,enriched:0,verified:0,enrichmentErrors:0,providerErrors,sourceHealth,sourceResults:this.sources.map(source=>({name:source.name,...(sourceResults.get(source.name)??{records:0,errors:0})}))};
   return{records:rankDiscoveryRecords(uniqueRecords),diagnostics};
  }
