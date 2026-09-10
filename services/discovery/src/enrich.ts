@@ -1,9 +1,10 @@
-import type { ApplicantProfile, ScholarshipRequirement } from "@scholarship-agent/shared";
+import type { ApplicantProfile } from "@scholarship-agent/shared";
 import { assessEligibility, classifyFunding, type FundingEvidence } from "@scholarship-agent/search";
 import type { DiscoveryRecord } from "./index";
 import { deepExtractPage, type DeepExtractionResult } from "./deep-extract";
 import { normalizeDiscoveryRecord, type NormalizedScholarship } from "./normalize";
 import { verifySource, type VerificationResult } from "./verification";
+import type { ExtractedRequirement } from "./requirements";
 
 export interface EnrichedDiscoveryRecord { record:DiscoveryRecord; candidate:NormalizedScholarship; extraction?:DeepExtractionResult; verification?:VerificationResult; enrichmentError?:string; }
 const MAX_ENRICH=40, CONCURRENCY=5, MAX_SECONDARY_RECORDS=24, MAX_SECONDARY_LINKS=3;
@@ -13,9 +14,6 @@ export async function enrichDiscoveryRecords(profile:ApplicantProfile,records:Di
  const selected=records.slice(0,Math.max(1,Math.min(limit,100)));const results:EnrichedDiscoveryRecord[]=new Array(selected.length);let cursor=0;
  async function worker(){while(true){const index=cursor++;if(index>=selected.length)return;const record=selected[index];try{
   let extraction=await deepExtractPage(record.url);
-  // For the highest-value candidates, follow a few relevant first-party links. This is the
-  // second research pass: funding, eligibility, requirements and programme pages often carry
-  // facts omitted from the discovery landing page.
   if(index<MAX_SECONDARY_RECORDS) extraction=await expandExtraction(extraction);
   const enrichedRecord:DiscoveryRecord={...record,url:extraction.finalUrl||record.url,title:extraction.title||record.title,snippet:[record.snippet,extraction.text].filter(Boolean).join(" ").slice(0,30000)};
   const candidate=normalizeDiscoveryRecord(enrichedRecord);const funding:FundingEvidence={text:extraction.text,tuitionCovered:/full tuition|100% tuition|tuition (fee )?waiver|fees fully covered|fees covered in full|tuition and fees covered in full/i.test(extraction.text),stipendMentioned:/stipend|living allowance|maintenance allowance|monthly allowance|living costs covered|bursary|funding package/i.test(extraction.text),accommodationCovered:/accommodation|housing|residential costs/i.test(extraction.text),travelCovered:/travel (grant|allowance|costs)|flight|airfare|relocation/i.test(extraction.text),insuranceCovered:/health insurance|medical insurance/i.test(extraction.text)};
@@ -38,7 +36,7 @@ async function expandExtraction(primary:DeepExtractionResult):Promise<DeepExtrac
  const requirements=mergeRequirements(primary.requirements,pages.flatMap(page=>page.requirements));
  return {...primary,text:allText,applicationUrl:primary.applicationUrl??pages.map(page=>page.applicationUrl).find(Boolean),deadline:primary.deadline??pages.map(page=>page.deadline).find(Boolean),fundingEvidence:unique([...primary.fundingEvidence,...pages.flatMap(page=>page.fundingEvidence)]).slice(0,12),eligibilityEvidence:unique([...primary.eligibilityEvidence,...pages.flatMap(page=>page.eligibilityEvidence)]).slice(0,12),degreeEvidence:unique([...primary.degreeEvidence,...pages.flatMap(page=>page.degreeEvidence)]).slice(0,12),structuredEvidence:unique([...primary.structuredEvidence,...pages.flatMap(page=>page.structuredEvidence)]).slice(0,12),requirements,links:uniqueLinks([...primary.links,...pages.flatMap(page=>page.links)]).slice(0,80)};
 }
-function mergeRequirements(primary:ScholarshipRequirement[],secondary:ScholarshipRequirement[]):ScholarshipRequirement[]{const seen=new Set<string>();return [...primary,...secondary].filter(item=>{const key=`${item.category??"other"}|${item.name.toLowerCase().trim()}`;if(seen.has(key))return false;seen.add(key);return true;});}
+function mergeRequirements(primary:ExtractedRequirement[],secondary:ExtractedRequirement[]):ExtractedRequirement[]{const seen=new Set<string>();return [...primary,...secondary].filter(item=>{const key=`${item.category}|${item.name.toLowerCase().trim()}`;if(seen.has(key))return false;seen.add(key);return true;});}
 function uniqueLinks(items:Array<{label:string;url:string}>){const seen=new Set<string>();return items.filter(item=>{const key=item.url.replace(/#.*$/,"");if(seen.has(key))return false;seen.add(key);return true;});}
 function unique(items:string[]){const seen=new Set<string>();return items.filter(item=>{const key=item.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;});}
 function hostOf(value:string):string|undefined{try{return new URL(value).hostname.toLowerCase().replace(/^www\./,"")}catch{return undefined}}
