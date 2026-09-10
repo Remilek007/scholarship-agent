@@ -1,64 +1,42 @@
-export interface ExtractedRequirement {
-  name: string;
-  required: boolean;
-  sourceInstruction: string;
-}
+export type RequirementCategory = "identity"|"academic"|"language"|"admission"|"funding"|"research"|"references"|"experience"|"documents"|"application"|"programme"|"other";
+export interface ExtractedRequirement { name:string; required:boolean; category:RequirementCategory; details:string; conditional?:string; sourceInstruction:string; evidence:string; }
 
-const requirementPatterns: Array<{ name: string; pattern: RegExp }> = [
-  { name: "Academic transcript", pattern: /transcript|academic record|statement of results/i },
-  { name: "Degree certificate", pattern: /degree certificate|certificate of graduation|graduation certificate/i },
-  { name: "Curriculum vitae", pattern: /curriculum vitae|\bcv\b|resume/i },
-  { name: "Personal statement", pattern: /personal statement|statement of purpose|\bsop\b/i },
-  { name: "Research proposal", pattern: /research proposal|research plan|study proposal/i },
-  { name: "Recommendation letters", pattern: /recommendation letter|reference letter|letters of recommendation|referee/i },
-  { name: "Proof of English proficiency", pattern: /ielts|toefl|english language proficiency|proof of english/i },
-  { name: "Passport or identification", pattern: /passport|proof of identity|national id/i },
-  { name: "Proof of nationality", pattern: /proof of nationality|citizenship certificate|nationality/i },
-  { name: "CV or resume", pattern: /curriculum vitae|\bcv\b|resume/i },
-  { name: "Portfolio", pattern: /portfolio/i },
-  { name: "Writing sample", pattern: /writing sample|sample of writing/i }
+type Rule={name:string;category:RequirementCategory;patterns:RegExp[];details:string};
+const rules:Rule[]=[
+ {name:"Academic transcript",category:"academic",patterns:[/transcript/i,/academic record/i,/statement of results/i],details:"Official academic transcript or equivalent record showing completed coursework, grades and academic performance. Capture whether an official, certified or institution-issued copy is required."},
+ {name:"Degree certificate",category:"academic",patterns:[/degree certificate/i,/certificate of graduation/i,/graduation certificate/i],details:"Proof of completion of the qualifying degree. If graduation is pending, capture whether a completion letter, provisional certificate or final transcript is accepted."},
+ {name:"Curriculum vitae / resume",category:"documents",patterns:[/curriculum vitae/i,/\bcv\b/i,/resume/i],details:"Current CV or resume covering education, employment, research, fieldwork, publications, projects, technical skills and relevant experience."},
+ {name:"Personal statement / statement of purpose",category:"application",patterns:[/personal statement/i,/statement of purpose/i,/\bsop\b/i],details:"Written statement explaining motivation, academic background, programme fit, objectives and intended outcomes. Capture any required questions, word/page limit and format."},
+ {name:"Research proposal / study plan",category:"research",patterns:[/research proposal/i,/research plan/i,/study proposal/i,/study plan/i],details:"Research or study plan describing topic, objectives, approach or methodology, relevance and expected contribution. Capture required length, template, supervisor alignment and submission format when stated."},
+ {name:"Recommendation / reference letters",category:"references",patterns:[/recommendation letter/i,/reference letter/i,/letters of recommendation/i,/academic referee/i,/professional referee/i,/referee/i],details:"Recommendation evidence from the required referee type. Capture number of referees, relationship/seniority, submission method, deadline and whether references must be confidential."},
+ {name:"English-language proficiency",category:"language",patterns:[/ielts/i,/toefl/i,/english language proficiency/i,/proof of english/i,/english test/i,/language requirement/i],details:"Evidence of required language proficiency. Capture accepted tests, minimum overall/component scores, validity period, exemptions and whether the requirement belongs to admission, scholarship or both."},
+ {name:"Passport / identity document",category:"identity",patterns:[/passport/i,/proof of identity/i,/national id/i,/identification document/i],details:"Valid identity document used to establish identity and/or nationality. Capture acceptable document types, validity rules and whether a certified copy is required."},
+ {name:"Proof of nationality / citizenship",category:"identity",patterns:[/proof of nationality/i,/citizenship certificate/i,/nationality/i,/citizenship/i],details:"Evidence establishing nationality or citizenship where nationality eligibility must be demonstrated. Capture acceptable evidence and whether dual nationality creates conditions."},
+ {name:"Proof of residence",category:"identity",patterns:[/proof of residence/i,/residence permit/i,/residency/i,/proof of domicile/i],details:"Evidence of residence or legal residency where eligibility depends on residence rather than nationality alone."},
+ {name:"Admission / university application",category:"admission",patterns:[/admission application/i,/apply for admission/i,/university application/i,/offer of admission/i,/admission offer/i],details:"Separate university/programme admission requirement or offer condition. Capture whether admission must be completed before scholarship application, before award, or by a separate deadline."},
+ {name:"Programme eligibility / qualifying degree",category:"programme",patterns:[/relevant degree/i,/related degree/i,/qualifying degree/i,/eligible programme/i,/field of study/i,/academic background/i],details:"Required prior qualification, subject area or academic background. Record the exact accepted disciplines from the source; do not infer equivalence."},
+ {name:"Minimum GPA / CGPA / grade",category:"academic",patterns:[/minimum gpa/i,/minimum cgpa/i,/minimum grade/i,/grade point average/i,/academic excellence/i,/upper second/i],details:"Academic performance threshold. Capture the exact minimum, grading scale, class/grade equivalent, conversion method and whether the threshold applies to overall degree, final years or a specific subject."},
+ {name:"Work / professional experience",category:"experience",patterns:[/work experience/i,/professional experience/i,/years of experience/i,/relevant experience/i],details:"Required or preferred professional experience. Capture minimum duration, relevant sectors/roles and whether volunteer, internship, research or community experience counts."},
+ {name:"Research experience",category:"research",patterns:[/research experience/i,/research background/i,/research skills/i,/research project/i],details:"Prior research experience or demonstrated research capability. Capture mandatory versus preferred status and acceptable evidence such as thesis, project, publication or research employment."},
+ {name:"Publications / scholarly output",category:"research",patterns:[/publication/i,/peer-reviewed/i,/journal article/i,/scholarly output/i],details:"Publications or scholarly outputs when required or preferred. Capture accepted publication types, authorship requirements and whether DOI/links or copies are requested."},
+ {name:"Financial need / financial evidence",category:"funding",patterns:[/financial need/i,/proof of funds/i,/financial statement/i,/household income/i,/income certificate/i],details:"Financial-need or financial-capacity evidence. Capture income period, household definition, acceptable documents and whether financial need is an eligibility criterion or selection factor."},
+ {name:"Application form / online portal",category:"application",patterns:[/application form/i,/online application/i,/application portal/i,/submit an application/i,/apply online/i],details:"Official application form or portal requirement. Capture account creation, separate scholarship/admission portals, required sections and submission confirmation rules."},
+ {name:"Application fee",category:"application",patterns:[/application fee/i,/application charge/i,/fee waiver/i],details:"Application fee, waiver or payment requirement. Distinguish scholarship fees from university admission fees and capture waiver eligibility."},
+ {name:"Portfolio",category:"documents",patterns:[/portfolio/i],details:"Portfolio or evidence of previous work where explicitly required or preferred. Capture format, number/size of items and subject relevance if stated."},
+ {name:"Writing sample",category:"documents",patterns:[/writing sample/i,/sample of writing/i],details:"Academic, professional or research writing sample. Capture length, topic, language, recency and format when stated."},
+ {name:"Interview / selection interview",category:"application",patterns:[/interview/i,/selection interview/i],details:"Interview or selection stage. Capture whether mandatory, who is interviewed, format, approximate stage and whether only shortlisted applicants participate."},
+ {name:"Supervisor / host confirmation",category:"research",patterns:[/supervisor/i,/supervisory agreement/i,/host institution/i,/host confirmation/i,/faculty member/i],details:"Supervisor, host or departmental support requirement. Capture whether prior contact is mandatory, whether a named supervisor is required and what confirmation/evidence must be supplied."},
+ {name:"Research fit / thematic alignment",category:"research",patterns:[/research interests/i,/research fit/i,/research topic/i,/research area/i,/thematic area/i],details:"Alignment with programme, supervisor, laboratory, department or funding theme. Treat this as a condition to verify, not as proof that the applicant already satisfies it."},
+ {name:"Medical / health documentation",category:"identity",patterns:[/medical examination/i,/medical certificate/i,/health certificate/i,/health examination/i],details:"Medical or health documentation required for admission, visa, scholarship or travel. Capture provider, tests, validity period and timing."},
+ {name:"Police / background certificate",category:"identity",patterns:[/police clearance/i,/criminal record/i,/background check/i],details:"Police, criminal-record or background documentation where explicitly required. Capture issuing authority and validity period."},
+ {name:"Visa / immigration evidence",category:"identity",patterns:[/visa/i,/immigration status/i],details:"Visa or immigration condition where the funding or programme requires a particular status. Distinguish application-stage evidence from post-award/arrival requirements."},
+ {name:"Deadline / submission timing",category:"application",patterns:[/deadline/i,/closing date/i,/applications? close/i,/apply by/i],details:"Submission must occur before the stated closing date/time. Capture timezone, exact cutoff, separate scholarship/admission deadlines and whether late submissions are accepted."}
 ];
-
-const sectionPattern = /(?:required documents|application documents|supporting documents|documents required|how to apply|application requirements)[\s:]*([\s\S]{0,7000})/i;
-
-export function extractApplicationRequirements(htmlOrText: string): ExtractedRequirement[] {
-  const text = normalizeText(htmlOrText);
-  const section = text.match(sectionPattern)?.[1] ?? text;
-  const results: ExtractedRequirement[] = [];
-  const seen = new Set<string>();
-
-  for (const item of requirementPatterns) {
-    const match = section.match(item.pattern);
-    if (!match) continue;
-    const context = contextAround(section, match.index ?? 0);
-    const required = !/optional|may submit|if applicable|where applicable|not required/i.test(context);
-    const key = item.name.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    results.push({ name: item.name, required, sourceInstruction: context.slice(0, 500) });
-  }
-
-  return results;
+const sectionPattern=/(?:required documents|application documents|supporting documents|documents required|how to apply|application requirements|eligibility criteria|who can apply|selection criteria|application process|what you need)[\s:]*([\s\S]{0,16000})/i;
+const optionalPattern=/\b(optional|if applicable|where applicable|may submit|not required|preferred|desirable|encouraged)\b/i;
+export function extractApplicationRequirements(input:string):ExtractedRequirement[]{
+ const text=normalizeText(input); const section=text.match(sectionPattern)?.[1]??text; const out:ExtractedRequirement[]=[]; const seen=new Set<string>();
+ for(const rule of rules){let hit:RegExpMatchArray|undefined;for(const p of rule.patterns){const m=section.match(p);if(m){hit=m;break;}}if(!hit)continue;const context=contextAround(section,hit.index??0);const key=rule.name.toLowerCase();if(seen.has(key))continue;seen.add(key);const optional=optionalPattern.test(context);out.push({name:rule.name,required:!optional,category:rule.category,details:rule.details,sourceInstruction:context.slice(0,1200),evidence:context.slice(0,2200)});}return out;
 }
-
-function normalizeText(value: string): string {
-  return value
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function contextAround(text: string, index: number): string {
-  const start = Math.max(0, index - 180);
-  const end = Math.min(text.length, index + 420);
-  return text.slice(start, end).trim();
-}
+function normalizeText(value:string){return value.replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<noscript[\s\S]*?<\/noscript>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&lt;/gi,"<").replace(/&gt;/gi,">").replace(/&quot;/gi,'"').replace(/&#39;/gi,"'").replace(/\s+/g," ").trim();}
+function contextAround(text:string,index:number){return text.slice(Math.max(0,index-450),Math.min(text.length,index+1400)).trim();}
