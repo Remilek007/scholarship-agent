@@ -12,58 +12,22 @@ export class DiscoveryEngine {
   constructor(private readonly sources: ScholarshipSource[]) {}
   async plan(profile: ApplicantProfile): Promise<string[]> { return buildDiscoveryQueries(profile); }
   async search(profile: ApplicantProfile, queries = buildDiscoveryQueries(profile)): Promise<DiscoveryRecord[]> { return (await this.searchWithDiagnostics(profile, queries)).records; }
-
   async searchWithDiagnostics(profile: ApplicantProfile, queries = buildDiscoveryQueries(profile)) {
-    const records: DiscoveryRecord[] = [];
-    const providerErrors: DiscoveryDiagnostics["providerErrors"] = [];
+    const records: DiscoveryRecord[] = []; const providerErrors: DiscoveryDiagnostics["providerErrors"] = [];
     const sourceResults = new Map<string, { records: number; errors: number }>();
-    const onceSources = this.sources.filter(source => source.runOnce);
-    const querySources = this.sources.filter(source => !source.runOnce);
+    const onceSources = this.sources.filter(source => source.runOnce); const querySources = this.sources.filter(source => !source.runOnce);
     const addSourceResult = (name: string, count: number, error = false) => { const current = sourceResults.get(name) ?? { records: 0, errors: 0 }; current.records += count; if (error) current.errors += 1; sourceResults.set(name, current); };
-
     const onceResults = await Promise.allSettled(onceSources.map(source => source.search("registry discovery")));
-    onceResults.forEach((result, index) => {
-      const source = onceSources[index];
-      if (result.status === "fulfilled") { records.push(...result.value); addSourceResult(source.name, result.value.length); }
-      else { const message = errorMessage(result.reason); addSourceResult(source.name, 0, true); providerErrors.push({ source: source.name, query: "registry discovery", error: message }); }
-    });
-
+    onceResults.forEach((result, index) => { const source = onceSources[index]; if (result.status === "fulfilled") { records.push(...result.value); addSourceResult(source.name, result.value.length); } else { const message = errorMessage(result.reason); addSourceResult(source.name, 0, true); providerErrors.push({ source: source.name, query: "registry discovery", error: message }); } });
     let cursor = 0;
-    const runQueryWorker = async () => {
-      while (true) {
-        const index = cursor++;
-        if (index >= queries.length) return;
-        const query = queries[index];
-        const results = await Promise.allSettled(querySources.map(source => source.search(query)));
-        results.forEach((result, sourceIndex) => {
-          const source = querySources[sourceIndex];
-          if (result.status === "fulfilled") { records.push(...result.value); addSourceResult(source.name, result.value.length); }
-          else { const message = errorMessage(result.reason); addSourceResult(source.name, 0, true); providerErrors.push({ source: source.name, query, error: message }); }
-        });
-      }
-    };
+    const runQueryWorker = async () => { while (true) { const index = cursor++; if (index >= queries.length) return; const query = queries[index]; const results = await Promise.allSettled(querySources.map(source => source.search(query))); results.forEach((result, sourceIndex) => { const source = querySources[sourceIndex]; if (result.status === "fulfilled") { records.push(...result.value); addSourceResult(source.name, result.value.length); } else { const message = errorMessage(result.reason); addSourceResult(source.name, 0, true); providerErrors.push({ source: source.name, query, error: message }); } }); } };
     await Promise.all(Array.from({ length: Math.min(QUERY_CONCURRENCY, Math.max(1, queries.length)) }, runQueryWorker));
-
     const uniqueRecords = deduplicateRecords(records);
     const sourceHealth = await Promise.all(this.sources.map(async source => { try { return { name: source.name, healthy: await source.healthCheck() }; } catch { return { name: source.name, healthy: false }; } }));
-    const diagnostics: DiscoveryDiagnostics = {
-      queries: queries.length, sourcesConfigured: this.sources.length, sourcesHealthy: sourceHealth.filter(item => item.healthy).length,
-      registrySources: onceSources.length, providerSources: querySources.length, rawRecords: records.length, uniqueRecords: uniqueRecords.length,
-      selectedForEnrichment: 0, enriched: 0, verified: 0, enrichmentErrors: 0, providerErrors, sourceHealth,
-      sourceResults: this.sources.map(source => ({ name: source.name, ...(sourceResults.get(source.name) ?? { records: 0, errors: 0 }) }))
-    };
+    const diagnostics: DiscoveryDiagnostics = { queries: queries.length, sourcesConfigured: this.sources.length, sourcesHealthy: sourceHealth.filter(item => item.healthy).length, registrySources: onceSources.length, providerSources: querySources.length, rawRecords: records.length, uniqueRecords: uniqueRecords.length, selectedForEnrichment: 0, enriched: 0, verified: 0, enrichmentErrors: 0, providerErrors, sourceHealth, sourceResults: this.sources.map(source => ({ name: source.name, ...(sourceResults.get(source.name) ?? { records: 0, errors: 0 }) })) };
     return { records: rankDiscoveryRecords(uniqueRecords), diagnostics };
   }
-
-  async searchAndPersist(profile: ApplicantProfile, options: { deepEnrich?: boolean; limit?: number } = {}) {
-    const searched = await this.searchWithDiagnostics(profile);
-    const records = searched.records;
-    if (options.deepEnrich === false) { const persistence = await persistDiscoveryRecords(records); return { records, persistence, enriched: [], verified: 0, diagnostics: searched.diagnostics }; }
-    const enrichmentLimit = Math.max(1, Math.min(options.limit ?? 40, 100));
-    const enriched = await enrichDiscoveryRecords(profile, records, enrichmentLimit);
-    const persistence = await persistEnrichedDiscoveryRecords(enriched);
-    return { records, enriched: enriched.map(item => item.candidate), enrichmentErrors: enriched.filter(item => item.enrichmentError).map(item => ({ url: item.record.url, error: item.enrichmentError })), persistence, verified: persistence.verified, diagnostics: { ...searched.diagnostics, selectedForEnrichment: Math.min(records.length, enrichmentLimit), enriched: enriched.length, verified: persistence.verified, enrichmentErrors: enriched.filter(item => item.enrichmentError).length } };
-  }
+  async searchAndPersist(profile: ApplicantProfile, options: { deepEnrich?: boolean; limit?: number } = {}) { const searched = await this.searchWithDiagnostics(profile); const records = searched.records; if (options.deepEnrich === false) { const persistence = await persistDiscoveryRecords(records); return { records, persistence, enriched: [], verified: 0, diagnostics: searched.diagnostics }; } const enrichmentLimit = Math.max(1, Math.min(options.limit ?? 40, 100)); const enriched = await enrichDiscoveryRecords(profile, records, enrichmentLimit); const persistence = await persistEnrichedDiscoveryRecords(enriched); return { records, enriched: enriched.map(item => item.candidate), enrichmentErrors: enriched.filter(item => item.enrichmentError).map(item => ({ url: item.record.url, error: item.enrichmentError })), persistence, verified: persistence.verified, diagnostics: { ...searched.diagnostics, selectedForEnrichment: Math.min(records.length, enrichmentLimit), enriched: enriched.length, verified: persistence.verified, enrichmentErrors: enriched.filter(item => item.enrichmentError).length } }; }
   async persist(records: DiscoveryRecord[]) { return persistDiscoveryRecords(records); }
   async health() { return Promise.all(this.sources.map(async source => ({ name: source.name, healthy: await source.healthCheck() }))); }
 }
@@ -84,7 +48,7 @@ export { extractApplicationRequirements } from "./requirements";
 export type { ExtractedRequirement } from "./requirements";
 export { deepExtractPage } from "./deep-extract";
 export type { DeepExtractionResult } from "./deep-extract";
-export { enrichDiscoveryRecords } from "./enrich";
+export { enrichDiscoveryRecords, expandExtraction } from "./enrich";
 export type { EnrichedDiscoveryRecord } from "./enrich";
 export { SOURCE_REGISTRY, getEnabledSourceRegistry, getSourceRegistryUrls } from "./source-registry";
 export type { DiscoverySourceDefinition } from "./source-registry";
