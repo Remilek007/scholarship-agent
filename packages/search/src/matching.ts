@@ -15,6 +15,7 @@ export function scoreCandidate(profile: ApplicantProfile, candidate: Scholarship
   const opportunityScore = candidate.opportunityType && intelligence.opportunityTypes.includes(candidate.opportunityType) ? 1 : 0.5;
   const deadlineScore = deadlineUrgency(candidate.deadline);
   const profileScore = Math.min(1, fieldScore * 0.45 + researchScore * 0.2 + skillScore * 0.15 + academicScore * 0.15 + opportunityScore * 0.05);
+  const evidenceConfidence = eligibility.confidence;
   const reasons = [...eligibility.reasons];
   if (fundingScore) reasons.push("Funding meets the minimum funded requirement");
   if (profile.degreeField && textIncludes(candidate, profile.degreeField)) reasons.push(`Academic discipline matches: ${profile.degreeField}`);
@@ -26,8 +27,22 @@ export function scoreCandidate(profile: ApplicantProfile, candidate: Scholarship
 
   const overallScore = eligibility.status === "not_eligible" || !fundingScore
     ? 0
-    : fieldScore * 0.35 + fundingScore * 0.2 + academicScore * 0.12 + researchScore * 0.12 + skillScore * 0.07 + deadlineScore * 0.04 + eligibility.confidence * 0.05 + opportunityScore * 0.05;
-  return { eligibility: eligibility.status, fieldScore, fundingScore, academicScore, profileScore, deadlineScore, confidence: eligibility.confidence, overallScore, reasons };
+    : fieldScore * 0.35 + fundingScore * 0.2 + academicScore * 0.12 + researchScore * 0.12 + skillScore * 0.07 + deadlineScore * 0.04 + evidenceConfidence * 0.05 + opportunityScore * 0.05;
+  return {
+    eligibility: eligibility.status,
+    fieldScore,
+    researchScore,
+    skillScore,
+    opportunityScore,
+    fundingScore,
+    academicScore,
+    profileScore,
+    deadlineScore,
+    evidenceConfidence,
+    confidence: evidenceConfidence,
+    overallScore,
+    reasons
+  };
 }
 
 function academicFit(profile: ApplicantProfile, candidate: ScholarshipCandidate): number {
