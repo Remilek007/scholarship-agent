@@ -5,15 +5,19 @@ settings:
   excludeLinksFromLockfile: false
 
 importers:
-
   .:
     dependencies: {}
-
   apps/web:
     dependencies:
       '@vitejs/plugin-react':
         specifier: ^5.0.2
         version: 5.0.2
+      mammoth:
+        specifier: ^1.12.2
+        version: 1.12.2
+      pdfjs-dist:
+        specifier: ^6.3.289
+        version: 6.3.289
       react:
         specifier: ^19.1.1
         version: 19.1.1
@@ -33,7 +37,6 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
-
   packages/database:
     dependencies:
       drizzle-orm:
@@ -52,7 +55,6 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
-
   packages/schemas:
     dependencies:
       '@scholarship-agent/shared':
@@ -65,7 +67,6 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
-
   packages/search:
     dependencies:
       '@scholarship-agent/shared':
@@ -75,13 +76,11 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
-
   packages/shared:
     devDependencies:
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
-
   services/api:
     dependencies:
       '@scholarship-agent/database':
@@ -118,7 +117,6 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
-
   services/discovery:
     dependencies:
       '@scholarship-agent/database':
@@ -130,9 +128,5 @@ importers:
       '@scholarship-agent/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-    devDependencies:
-      typescript:
-        specifier: ^5.9.2
-        version: 5.9.2
 
 packages: {}
