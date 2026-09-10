@@ -6,6 +6,7 @@ import type { DiscoveryDiagnostics } from "./diagnostics";
 
 export interface DiscoveryRecord { url: string; title?: string; snippet?: string; source: string; discoveryMethod: string; query: string; }
 export interface ScholarshipSource { readonly name: string; readonly runOnce?: boolean; search(query: string): Promise<DiscoveryRecord[]>; healthCheck(): Promise<boolean>; }
+const QUERY_CONCURRENCY = 3;
 
 export class DiscoveryEngine {
   constructor(private readonly sources: ScholarshipSource[]) {}
@@ -27,31 +28,28 @@ export class DiscoveryEngine {
       else { const message = errorMessage(result.reason); addSourceResult(source.name, 0, true); providerErrors.push({ source: source.name, query: "registry discovery", error: message }); }
     });
 
-    for (const query of queries) {
-      const results = await Promise.allSettled(querySources.map(source => source.search(query)));
-      results.forEach((result, index) => {
-        const source = querySources[index];
-        if (result.status === "fulfilled") { records.push(...result.value); addSourceResult(source.name, result.value.length); }
-        else { const message = errorMessage(result.reason); addSourceResult(source.name, 0, true); providerErrors.push({ source: source.name, query, error: message }); }
-      });
-    }
+    let cursor = 0;
+    const runQueryWorker = async () => {
+      while (true) {
+        const index = cursor++;
+        if (index >= queries.length) return;
+        const query = queries[index];
+        const results = await Promise.allSettled(querySources.map(source => source.search(query)));
+        results.forEach((result, sourceIndex) => {
+          const source = querySources[sourceIndex];
+          if (result.status === "fulfilled") { records.push(...result.value); addSourceResult(source.name, result.value.length); }
+          else { const message = errorMessage(result.reason); addSourceResult(source.name, 0, true); providerErrors.push({ source: source.name, query, error: message }); }
+        });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(QUERY_CONCURRENCY, Math.max(1, queries.length)) }, runQueryWorker));
 
     const uniqueRecords = deduplicateRecords(records);
     const sourceHealth = await Promise.all(this.sources.map(async source => { try { return { name: source.name, healthy: await source.healthCheck() }; } catch { return { name: source.name, healthy: false }; } }));
     const diagnostics: DiscoveryDiagnostics = {
-      queries: queries.length,
-      sourcesConfigured: this.sources.length,
-      sourcesHealthy: sourceHealth.filter(item => item.healthy).length,
-      registrySources: onceSources.length,
-      providerSources: querySources.length,
-      rawRecords: records.length,
-      uniqueRecords: uniqueRecords.length,
-      selectedForEnrichment: 0,
-      enriched: 0,
-      verified: 0,
-      enrichmentErrors: 0,
-      providerErrors,
-      sourceHealth,
+      queries: queries.length, sourcesConfigured: this.sources.length, sourcesHealthy: sourceHealth.filter(item => item.healthy).length,
+      registrySources: onceSources.length, providerSources: querySources.length, rawRecords: records.length, uniqueRecords: uniqueRecords.length,
+      selectedForEnrichment: 0, enriched: 0, verified: 0, enrichmentErrors: 0, providerErrors, sourceHealth,
       sourceResults: this.sources.map(source => ({ name: source.name, ...(sourceResults.get(source.name) ?? { records: 0, errors: 0 }) }))
     };
     return { records: rankDiscoveryRecords(uniqueRecords), diagnostics };
