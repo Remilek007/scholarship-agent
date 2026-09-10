@@ -5,7 +5,45 @@ export type OpportunityType = "scholarship" | "studentship" | "research_position
 export type ApplicationStatus = "discovered" | "review" | "preparing" | "ready" | "submitted" | "withdrawn";
 export type ApplicationEventType = "created" | "status_changed" | "document_attached" | "draft_saved" | "review_requested" | "submission_approved" | "submitted";
 
-export interface ApplicantProfile { nationality:string; degreeLevel:DegreeLevel; targetFields:string[]; minimumFunding:"substantial"|"full"; academicScore?:number; academicScale?:number; highestQualification?:string; degreeField?:string; workExperience?:string; }
+export interface ApplicantProfile {
+  nationality:string;
+  degreeLevel:DegreeLevel;
+  targetFields:string[];
+  minimumFunding:"substantial"|"full";
+  academicScore?:number;
+  academicScale?:number;
+  highestQualification?:string;
+  degreeField?:string;
+  workExperience?:string;
+  researchInterests?:string[];
+  researchExperience?:string;
+  technicalSkills?:string[];
+  languages?:string[];
+  countriesOfInterest?:string[];
+  excludedCountries?:string[];
+  yearsOfExperience?:number;
+  graduationYear?:number;
+  preferredOpportunityTypes?:OpportunityType[];
+}
+
+export interface ApplicantEvidence {
+  field:string;
+  value:string;
+  confidence:number;
+  source:"profile"|"cv"|"transcript"|"statement"|"user_confirmed"|"inferred";
+  evidence?:string;
+}
+
+export interface ApplicantIntelligence {
+  normalizedFields:string[];
+  researchThemes:string[];
+  skills:string[];
+  opportunityTypes:OpportunityType[];
+  evidence:ApplicantEvidence[];
+  searchTerms:string[];
+  completeness:number;
+}
+
 export interface ScholarshipEligibilityEvidence { internationalStudents?:boolean; eligibleNationalities?:string[]; excludedNationalities?:string[]; minimumAcademicScore?:number; academicScale?:number; text?:string; }
 
 export type RequirementCategory = "identity"|"academic"|"language"|"admission"|"funding"|"research"|"references"|"experience"|"documents"|"application"|"programme"|"other";
