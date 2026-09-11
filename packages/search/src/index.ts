@@ -5,7 +5,6 @@ const fields = ["forestry", "forest science", "forest management", "silviculture
 const discoveryIntents = ["fully funded scholarship", "funded master's", "funded MSc", "studentship", "graduate research position", "research assistantship", "funded thesis", "supervisor funded MSc", "funded graduate position", "MSc research project"];
 const authoritativeDomains = ["daad.de", "chevening.org", "cscuk.fcdo.gov.uk", "fulbrightonline.org", "australiaawards.gov.au", "studyinjapan.go.jp", "studyinsweden.se", "studyinfinland.fi", "nuffic.nl", "erasmus-plus.ec.europa.eu", "euraxess.ec.europa.eu", "fao.org", "iucn.org", "unep.org", "unesco.org", "cifor-icraf.org", "wri.org", "wwf.org", "forest-trends.org", "thegef.org"];
 
-/** Build a bounded, diverse search plan. Expensive providers receive fewer, higher-information queries. */
 export function buildDiscoveryQueries(profile: ApplicantProfile): string[] {
   const intelligence = buildApplicantIntelligence(profile);
   const nationality = profile.nationality || "international";
@@ -13,7 +12,6 @@ export function buildDiscoveryQueries(profile: ApplicantProfile): string[] {
   const selected = intelligence.normalizedFields.length ? intelligence.normalizedFields : fields.slice(0, 8);
   const queries = new Set<string>();
   const add = (query: string) => { const normalized = query.trim().replace(/\s+/g, " "); if (normalized && queries.size < 72) queries.add(normalized); };
-
   for (const field of selected.slice(0, 10)) {
     add(`"${field}" "fully funded" ${degree} "${nationality}"`);
     add(`"${field}" funded MSc "international students"`);
@@ -36,7 +34,6 @@ export function buildDiscoveryQueries(profile: ApplicantProfile): string[] {
   add(`forest ecology biodiversity funded graduate research position`);
   add(`natural resources climate funded MSc research position`);
   add(`remote sensing GIS forestry funded master's`);
-
   for (const domain of authoritativeDomains) {
     add(`site:${domain} forestry conservation ${degree} funding`);
     add(`site:${domain} "funded" "international students" forestry`);
@@ -61,3 +58,7 @@ export { uniqueSearchResults } from "./sources";
 export { BraveSearchProvider, PublicSearchProvider, RssSearchProvider, TavilySearchProvider } from "./providers";
 export { extractEvidence, classifyFundingEvidence } from "./evidence";
 export type { EvidenceItem } from "./evidence";
+export { planDiscoveryQueries } from "./query-planner";
+export type { DiscoveryIntent, PlannedQuery } from "./query-planner";
+export { fuseSearchResults } from "./hybrid-retrieval";
+export type { FusedSearchResult, RetrievalInput } from "./hybrid-retrieval";
