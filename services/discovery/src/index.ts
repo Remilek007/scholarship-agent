@@ -1,4 +1,4 @@
-import { buildDiscoveryQueries } from "@scholarship-agent/search";
+import { fuseSearchResults, planDiscoveryQueries } from "@scholarship-agent/search";
 import type { ApplicantProfile } from "@scholarship-agent/shared";
 import { persistDiscoveryRecords, persistEnrichedDiscoveryRecords } from "./persistence";
 import { enrichDiscoveryRecords } from "./enrich";
@@ -10,19 +10,19 @@ const QUERY_CONCURRENCY=3;
 
 export class DiscoveryEngine {
  constructor(private readonly sources:ScholarshipSource[]){}
- async plan(profile:ApplicantProfile):Promise<string[]>{return buildDiscoveryQueries(profile);}
- async search(profile:ApplicantProfile,queries=buildDiscoveryQueries(profile)):Promise<DiscoveryRecord[]>{return(await this.searchWithDiagnostics(profile,queries)).records;}
- async searchWithDiagnostics(profile:ApplicantProfile,queries=buildDiscoveryQueries(profile)){
-  const records:DiscoveryRecord[]=[];const providerErrors:DiscoveryDiagnostics["providerErrors"]=[];const sourceResults=new Map<string,{records:number;errors:number}>();
+ async plan(profile:ApplicantProfile):Promise<string[]>{return planDiscoveryQueries(profile).map(item=>item.query);}
+ async search(profile:ApplicantProfile,queries=planDiscoveryQueries(profile).map(item=>item.query)):Promise<DiscoveryRecord[]>{return(await this.searchWithDiagnostics(profile,queries)).records;}
+ async searchWithDiagnostics(profile:ApplicantProfile,queries=planDiscoveryQueries(profile).map(item=>item.query)){
+  const records:DiscoveryRecord[]=[];const retrievalInputs:{query:string;results:DiscoveryRecord[];weight?:number}[]=[];const providerErrors:DiscoveryDiagnostics["providerErrors"]=[];const sourceResults=new Map<string,{records:number;errors:number}>();
   const onceSources=this.sources.filter(source=>source.runOnce);const querySources=this.sources.filter(source=>!source.runOnce);
   const addSourceResult=(name:string,count:number,error=false)=>{const current=sourceResults.get(name)??{records:0,errors:0};current.records+=count;if(error)current.errors+=1;sourceResults.set(name,current);};
   const onceResults=await Promise.allSettled(onceSources.map(source=>source.search("registry discovery")));
   onceResults.forEach((result,index)=>{const source=onceSources[index];if(result.status==="fulfilled"){records.push(...result.value);addSourceResult(source.name,result.value.length);}else{const message=errorMessage(result.reason);addSourceResult(source.name,0,true);providerErrors.push({source:source.name,query:"registry discovery",error:message});}});
   let cursor=0;
-  const runQueryWorker=async()=>{while(true){const index=cursor++;if(index>=queries.length)return;const query=queries[index];const results=await Promise.allSettled(querySources.map(source=>source.search(query)));results.forEach((result,sourceIndex)=>{const source=querySources[sourceIndex];if(result.status==="fulfilled"){records.push(...result.value);addSourceResult(source.name,result.value.length);}else{const message=errorMessage(result.reason);addSourceResult(source.name,0,true);providerErrors.push({source:source.name,query,error:message});}});}};
+  const runQueryWorker=async()=>{while(true){const index=cursor++;if(index>=queries.length)return;const query=queries[index];const results=await Promise.allSettled(querySources.map(source=>source.search(query)));const successful:DiscoveryRecord[]=[];results.forEach((result,sourceIndex)=>{const source=querySources[sourceIndex];if(result.status==="fulfilled"){records.push(...result.value);successful.push(...result.value);addSourceResult(source.name,result.value.length);}else{const message=errorMessage(result.reason);addSourceResult(source.name,0,true);providerErrors.push({source:source.name,query,error:message});}});if(successful.length)retrievalInputs.push({query,results:successful});}};
   await Promise.all(Array.from({length:Math.min(QUERY_CONCURRENCY,Math.max(1,queries.length))},runQueryWorker));
-  const uniqueRecords=deduplicateRecords(records);
-  // Search attempts already provide health evidence. Avoid an extra provider request per source.
+  const fusedRecords=fuseSearchResults(retrievalInputs,250) as DiscoveryRecord[];
+  const uniqueRecords=deduplicateRecords([...fusedRecords,...records]);
   const sourceHealth=this.sources.map(source=>{const stats=sourceResults.get(source.name);return{name:source.name,healthy:stats !== undefined && stats.errors===0};});
   const diagnostics:DiscoveryDiagnostics={queries:queries.length,sourcesConfigured:this.sources.length,sourcesHealthy:sourceHealth.filter(item=>item.healthy).length,registrySources:onceSources.length,providerSources:querySources.length,rawRecords:records.length,uniqueRecords:uniqueRecords.length,selectedForEnrichment:0,enriched:0,verified:0,enrichmentErrors:0,providerErrors,sourceHealth,sourceResults:this.sources.map(source=>({name:source.name,...(sourceResults.get(source.name)??{records:0,errors:0})}))};
   return{records:rankDiscoveryRecords(uniqueRecords),diagnostics};
