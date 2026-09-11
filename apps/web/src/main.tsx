@@ -19,7 +19,18 @@ function funding(v:string){return({fully_funded:"Fully funded",substantially_fun
 function eligibility(v:string){return({confirmed_eligible:"Eligibility confirmed",probably_eligible:"Probably eligible",cannot_determine:"Needs eligibility review",not_eligible:"Not eligible"}as Record<string,string>)[v]||v?.replaceAll("_"," ")||"Not assessed"}
 function fmtDate(v?:string){if(!v)return"Not stated";const d=new Date(v);return Number.isNaN(d.getTime())?v:d.toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"})}
 function degree(v:string){return({masters:"Master's",phd:"PhD",undergraduate:"Undergraduate",other:"Other"}as Record<string,string>)[v]||v}
-function matches(x:any,q:string){if(!q.trim())return true;return[x.title,x.provider,x.university,x.country,x.opportunityType,...(x.fields||[])].filter(Boolean).join(" ").toLowerCase().includes(q.toLowerCase())}
+function canonicalizeUrl(value: string) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    url.search = "";
+    url.hostname = url.hostname.toLowerCase();
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    return url.toString();
+  } catch {
+    return value.trim();
+  }
+}
 async function extractDocument(file:File):Promise<{text:string;type:"cv"|"transcript"|"statement"|"unknown"}>{const name=file.name.toLowerCase();if(name.endsWith(".pdf")){const data=await file.arrayBuffer();const pdf=await pdfjsLib.getDocument({data}).promise;let text="";for(let pageNo=1;pageNo<=pdf.numPages;pageNo++){const page=await pdf.getPage(pageNo);const content=await page.getTextContent();text+=content.items.map((item:any)=>typeof item.str==="string"?item.str:"").join(" ")+"\n";}return{text,type:/transcript|academic record|result/i.test(name)?"transcript":"cv"};}if(name.endsWith(".docx")){const result=await mammoth.extractRawText({arrayBuffer:await file.arrayBuffer()});return{text:result.value,type:/transcript|academic record|result/i.test(name)?"transcript":"cv"};}return{text:await file.text(),type:/transcript|academic record|result/i.test(name)?"transcript":"cv"}}
 function App(){const[profile,setProfile]=React.useState<Profile>(loadProfile);const[items,setItems]=React.useState<Match[]>([]);const[records,setRecords]=React.useState<DiscoveryRecord[]>([]);const[tab,setTab]=React.useState<"matches"|"discovery">("matches");const[q,setQ]=React.useState("");const[f,setF]=React.useState("all");const[t,setT]=React.useState("all");const[busy,setBusy]=React.useState(true);const[discovering,setDiscovering]=React.useState(false);const[error,setError]=React.useState("");const[notice,setNotice]=React.useState("");const[profileOpen,setProfileOpen]=React.useState(false);const[analysis,setAnalysis]=React.useState<Analysis|null>(null);const[analysisBusy,setAnalysisBusy]=React.useState(false);const[diagnostics,setDiagnostics]=React.useState<any>(null);
 async function refresh(){setBusy(true);setError("");try{const[m,d]=await Promise.all([fetch(`${API}/api/matches/top`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({profile,limit:200})}),fetch(`${API}/api/discovery/records?limit=500`)]);const md=await readJson(m),dd=await readJson(d);if(!m.ok)throw Error(md.error||`Matches API returned ${m.status}`);if(!d.ok)throw Error(dd.error||`Discovery API returned ${d.status}`);setItems(Array.isArray(md.matches)?md.matches:[]);setRecords(Array.isArray(dd)?dd:[]);}catch(e){setError(e instanceof Error?e.message:"Unable to load scholarship data")}finally{setBusy(false)}}
