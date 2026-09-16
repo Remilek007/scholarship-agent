@@ -1,6 +1,6 @@
 [build]
   base = "."
-  command = "pnpm --filter @scholarship-agent/web build"
+  command = "pnpm install --no-frozen-lockfile && pnpm --filter @scholarship-agent/web build"
   publish = "apps/web/dist"
 
 [build.environment]
