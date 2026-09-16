@@ -1,19 +1,30 @@
 {
-  "version": 1,
+  "version": 2,
   "strategy": "federated-hybrid",
-  "description": "Configuration for broad scholarship discovery using multiple search engines and crawl/extraction fallbacks.",
+  "description": "Broad, evidence-first scholarship discovery using metasearch, direct sources, bounded crawling, extraction, deduplication, and diagnostics.",
   "providers": [
     { "id": "searxng", "enabled": true, "type": "metasearch", "env": "SEARXNG_URL" },
-    { "id": "native", "enabled": true, "type": "existing-provider" }
+    { "id": "native", "enabled": true, "type": "existing-provider" },
+    { "id": "direct-registry", "enabled": true, "type": "official-source-registry" }
   ],
+  "queryExpansion": {
+    "enabled": true,
+    "includeDegreeVariants": true,
+    "includeFundingVariants": true,
+    "includeResearchPositionVariants": true,
+    "includeCountryAndNationalityVariants": true,
+    "maxQueriesPerProfile": 24
+  },
   "crawl": {
-    "maxPagesPerQuery": 20,
-    "maxDepth": 2,
-    "concurrency": 4,
-    "requestTimeoutMs": 15000,
+    "maxPagesPerQuery": 40,
+    "maxDepth": 3,
+    "concurrency": 6,
+    "requestTimeoutMs": 20000,
     "followPagination": true,
     "respectRobotsTxt": true,
-    "playwrightFallback": true
+    "playwrightFallback": true,
+    "sameDomainOnlyAfterSeed": true,
+    "maxPagesPerDomain": 80
   },
   "extraction": {
     "mainText": true,
@@ -21,19 +32,24 @@
     "fundingSignals": true,
     "deadlineSignals": true,
     "eligibilitySignals": true,
-    "applicationLinks": true
+    "applicationLinks": true,
+    "contactAndSupervisorSignals": true,
+    "structuredData": true
   },
   "deduplication": {
     "canonicalUrl": true,
     "providerAndTitle": true,
     "titleSimilarity": true,
+    "providerTitleAndDeadline": true,
     "preserveOriginalUrl": true
   },
   "diagnostics": {
     "recordQueries": true,
     "recordProviders": true,
+    "recordDomains": true,
     "recordBlockedPages": true,
     "recordExtractionFailures": true,
-    "recordDuplicateReasons": true
+    "recordDuplicateReasons": true,
+    "recordEligibilityUncertainty": true
   }
 }
