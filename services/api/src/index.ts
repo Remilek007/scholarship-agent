@@ -27,4 +27,9 @@ app.post("/api/scholarships/:id/verify",async(req,res)=>{if(!repository)return r
 function isDegreeLevel(value:unknown):value is "undergraduate"|"masters"|"phd"|"other"{return value==="undergraduate"||value==="masters"||value==="phd"||value==="other"}
 function isFundingClass(value:unknown):value is "fully_funded"|"substantially_funded"|"partial"|"unfunded"|"unknown"{return value==="fully_funded"||value==="substantially_funded"||value==="partial"||value==="unfunded"||value==="unknown"}
 function isOpportunityType(value:unknown):value is OpportunityType{return value==="scholarship"||value==="studentship"||value==="research_position"||value==="assistantship"||value==="fellowship"||value==="grant"||value==="other"}
-app.listen(port,()=>console.log(`Scholarship Agent API listening on ${port} — analysis-only mode`));
+
+export { app };
+
+if (!process.env.NETLIFY) {
+  app.listen(port,()=>console.log(`Scholarship Agent API listening on ${port} — analysis-only mode`));
+}
