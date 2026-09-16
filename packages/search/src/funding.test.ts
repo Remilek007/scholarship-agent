@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyFunding, isFundedEnough } from "./funding";
+import { classifyFunding, isFundedEnough } from "./funding.ts";
 
 test("classifies explicit full funding", () => {
   const funding = classifyFunding({
