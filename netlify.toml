@@ -8,7 +8,7 @@
   NPM_FLAGS = "--version"
 
 [functions]
-  directory = "services/api/netlify/functions"
+  directory = "netlify/functions"
   node_bundler = "esbuild"
 
 [[redirects]]
