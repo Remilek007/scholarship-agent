@@ -2,15 +2,13 @@ import type { ApplicantProfile, ScholarshipCandidate } from "@scholarship-agent/
 import { planDiscoveryQueries, scoreCandidate } from "@scholarship-agent/search";
 import { createScholarshipRepository } from "@scholarship-agent/database";
 import { loadDiscoveryConfig } from "./config";
-import { enrichDiscoveryRecords } from "./enrich";
+import { enrichDiscoveryRecords, MAX_ENRICHMENT_RECORDS } from "./enrich";
 import { normalizeDiscoveryRecord } from "./normalize";
 import { deduplicateCandidates } from "./quality";
 import { recordDiscoveryProvenance } from "./persistence";
 import type { DiscoveryDiagnostics, DiscoveryRecord, ScholarshipSource } from "./index";
 
 export interface DiscoveryRunOptions { deepEnrich?: boolean; limit?: number; }
-
-const MAX_ENRICHMENT_RECORDS = 100;
 
 export class DiscoveryEngine {
   constructor(private readonly sources: ScholarshipSource[]) {}
