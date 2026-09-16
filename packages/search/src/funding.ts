@@ -1,4 +1,4 @@
-import type { FundingClass } from "@scholarship-agent/shared";
+import type { ApplicantProfile, FundingClass } from "@scholarship-agent/shared";
 
 export interface FundingEvidence {
   tuitionCovered?: boolean;
@@ -27,16 +27,17 @@ export function classifyFunding(evidence: FundingEvidence): FundingClass {
 
   if (exclusions && !explicitFull) return "unfunded";
   if (partial && !explicitFull && !(/100%|full tuition|fees covered in full/.test(text))) return "partial";
-
-  // Explicit full-funding language is sufficient when the page describes the
-  // award as covering the complete study/living package. A stipend or tuition
-  // signal raises confidence but should not be required redundantly.
   if (explicitFull && (tuition || stipend || accommodation || travel || insurance)) return "fully_funded";
   if (tuition && meaningfulSupport) return "substantially_funded";
   if (tuition) return "partial";
   return "unknown";
 }
 
-export function isFundedEnough(funding: FundingClass): boolean {
+/** Apply the applicant's actual minimum funding requirement. */
+export function isFundedEnough(
+  funding: FundingClass,
+  minimumFunding: ApplicantProfile["minimumFunding"] = "substantial"
+): boolean {
+  if (minimumFunding === "full") return funding === "fully_funded";
   return funding === "fully_funded" || funding === "substantially_funded";
 }

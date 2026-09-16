@@ -8,7 +8,7 @@ export function scoreCandidate(profile: ApplicantProfile, candidate: Scholarship
   const intelligence = buildApplicantIntelligence(profile);
   const eligibility = assessEligibility(profile, candidate);
   const fieldScore = scoreFieldRelevance({ title: candidate.title, fields: candidate.fields, snippet: candidate.eligibility?.text }, intelligence.normalizedFields);
-  const fundingScore = isFundedEnough(candidate.fundingClass) ? 1 : 0;
+  const fundingScore = isFundedEnough(candidate.fundingClass, profile.minimumFunding) ? 1 : 0;
   const academicScore = academicFit(profile, candidate);
   const skillScore = matchTerms(candidate, intelligence.skills);
   const researchScore = matchTerms(candidate, intelligence.researchThemes);
@@ -17,7 +17,7 @@ export function scoreCandidate(profile: ApplicantProfile, candidate: Scholarship
   const profileScore = Math.min(1, fieldScore * 0.45 + researchScore * 0.2 + skillScore * 0.15 + academicScore * 0.15 + opportunityScore * 0.05);
   const evidenceConfidence = eligibility.confidence;
   const reasons = [...eligibility.reasons];
-  if (fundingScore) reasons.push("Funding meets the minimum funded requirement");
+  if (fundingScore) reasons.push("Funding meets the applicant's minimum requirement");
   if (profile.degreeField && textIncludes(candidate, profile.degreeField)) reasons.push(`Academic discipline matches: ${profile.degreeField}`);
   const matchedSkills = intelligence.skills.filter(skill => textIncludes(candidate, skill));
   if (matchedSkills.length) reasons.push(`Profile/CV evidence matches: ${matchedSkills.slice(0, 5).join(", ")}`);
