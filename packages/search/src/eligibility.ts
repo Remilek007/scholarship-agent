@@ -21,8 +21,8 @@ export function assessEligibility(profile: ApplicantProfile, candidate: Scholars
   const text = [candidate.title, candidate.provider, candidate.university, candidate.country, ...candidate.fields, candidate.eligibility?.text]
     .filter(Boolean).join(" ").toLowerCase();
 
-  if (!isFundedEnough(candidate.fundingClass)) {
-    return { status: "not_eligible", confidence: 0.99, reasons: ["Funding does not meet the minimum requirement"] };
+  if (!isFundedEnough(candidate.fundingClass, profile.minimumFunding)) {
+    return { status: "not_eligible", confidence: 0.99, reasons: ["Funding does not meet the applicant's minimum requirement"] };
   }
   if (candidate.deadline) {
     const deadline = new Date(candidate.deadline).getTime();
@@ -30,14 +30,16 @@ export function assessEligibility(profile: ApplicantProfile, candidate: Scholars
       return { status: "not_eligible", confidence: 0.99, reasons: ["Application deadline has passed"] };
     }
   }
-  if (candidate.degreeLevel && candidate.degreeLevel !== profile.degreeLevel) {
+  if (candidate.degreeLevel && profile.degreeLevel !== "other" && candidate.degreeLevel !== profile.degreeLevel) {
     return { status: "not_eligible", confidence: 0.99, reasons: [`Opportunity is for ${candidate.degreeLevel}, not ${profile.degreeLevel}`] };
   }
 
   const degreeTerms = degreeAliases[profile.degreeLevel] ?? [];
-  const hasDegreeSignal = degreeTerms.some((term) => text.includes(term));
-  if (profile.degreeLevel === "masters" && hasDegreeSignal) reasons.push("Master's-level study is indicated");
-  else if (profile.degreeLevel === "masters") reasons.push("Master's level is not explicitly confirmed yet");
+  const hasDegreeSignal = profile.degreeLevel === "other" || degreeTerms.some((term) => text.includes(term));
+  if (profile.degreeLevel !== "other") {
+    const degreeLabel = profile.degreeLevel === "masters" ? "Master's" : profile.degreeLevel === "phd" ? "PhD" : "undergraduate";
+    reasons.push(hasDegreeSignal ? `${degreeLabel}-level study is indicated` : `${degreeLabel} level is not explicitly confirmed yet`);
+  }
 
   const evidence = candidate.eligibility;
   const nationality = profile.nationality.trim().toLowerCase();
@@ -76,10 +78,10 @@ export function assessEligibility(profile: ApplicantProfile, candidate: Scholars
   if (fieldScore < 0.35) {
     return { status: "cannot_determine", confidence: Math.min(confidence, 0.55), reasons: [...reasons, "Field relevance is too weak to confirm eligibility"] };
   }
-  reasons.push(fieldScore >= 0.9 ? "Strong Forestry/Wildlife or closely related field fit" : "Related environmental field fit detected");
+  reasons.push(fieldScore >= 0.9 ? "Strong target-field relevance" : "Related target-field relevance detected");
 
   confidence = Math.min(0.98, confidence);
-  const nationalityKnown = eligible.length > 0 || evidence?.internationalStudents === true || /international students|all nationalities|any nationality|nigeria|nigerian/.test(text);
+  const nationalityKnown = eligible.length > 0 || evidence?.internationalStudents === true || /international students|all nationalities|any nationality|open to international applicants/.test(text);
   const status: EligibilityStatus = hasDegreeSignal && nationalityKnown && (minimum === undefined || profile.academicScore !== undefined)
     ? "probably_eligible"
     : "cannot_determine";

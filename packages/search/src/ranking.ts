@@ -14,7 +14,7 @@ export interface RankedCandidate extends ScholarshipCandidate {
 export function rankCandidates(profile: ApplicantProfile, candidates: ScholarshipCandidate[]): RankedCandidate[] {
   return candidates.map((candidate) => {
     const field = scoreFieldRelevance({ title: candidate.title, fields: candidate.fields }, profile.targetFields);
-    const funding = isFundedEnough(candidate.fundingClass) ? 1 : 0;
+    const funding = isFundedEnough(candidate.fundingClass, profile.minimumFunding) ? 1 : 0;
     const academic = profile.academicScore !== undefined && profile.academicScale
       ? Math.min(1, Math.max(0, profile.academicScore / profile.academicScale))
       : 0.5;
@@ -22,8 +22,6 @@ export function rankCandidates(profile: ApplicantProfile, candidates: Scholarshi
     const eligibility = assessEligibility(profile, candidate);
     const eligibilityGate = gate(profile, candidate, eligibility.status, field, funding);
 
-    // Funding and confirmed hard exclusions are gates, not trade-offs. A highly
-    // relevant but ineligible opportunity must never outrank a viable one.
     const score = eligibilityGate === "fail"
       ? 0
       : field * 0.4 + funding * 0.25 + academic * 0.2 + deadline * 0.15;
@@ -35,7 +33,7 @@ export function rankCandidates(profile: ApplicantProfile, candidates: Scholarshi
         : "Weak target-field relevance";
     const reasons = [
       fieldReason,
-      funding ? "Funding meets the minimum requirement" : "Funding is not verified as sufficient",
+      funding ? "Funding meets the applicant's minimum requirement" : "Funding is not verified as sufficient",
       deadline >= 0.8 ? "Deadline is active and relatively soon" : deadline > 0 ? "Deadline is active" : "Deadline is not yet known"
     ];
     if (eligibility.status === "confirmed_eligible") reasons.push("Eligibility evidence supports the applicant profile");
