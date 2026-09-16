@@ -36,7 +36,7 @@ export function rankCandidates(profile: ApplicantProfile, candidates: Scholarshi
       funding ? "Funding meets the applicant's minimum requirement" : "Funding is not verified as sufficient",
       deadline >= 0.8 ? "Deadline is active and relatively soon" : deadline > 0 ? "Deadline is active" : "Deadline is not yet known"
     ];
-    if (eligibility.status === "confirmed_eligible") reasons.push("Eligibility evidence supports the applicant profile");
+    if (eligibility.status === "probably_eligible" || eligibility.status === "confirmed_eligible") reasons.push("Eligibility evidence supports the applicant profile");
     else if (eligibilityGate === "review") reasons.push("Some eligibility details still need verification");
     if (eligibility.status === "not_eligible") reasons.push("Hard eligibility exclusion detected");
 
