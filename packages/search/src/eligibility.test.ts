@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assessEligibility, extractEligibilityEvidence } from "./eligibility";
+import { assessEligibility, extractEligibilityEvidence } from "./eligibility.ts";
 
 test("extracts international eligibility evidence without applicant-specific country rules", () => {
   const evidence = extractEligibilityEvidence("International applicants are eligible. Minimum GPA: 3.0/4.0.");
