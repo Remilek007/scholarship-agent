@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "strategy": "federated-hybrid",
+  "description": "Configuration for broad scholarship discovery using multiple search engines and crawl/extraction fallbacks.",
+  "providers": [
+    { "id": "searxng", "enabled": true, "type": "metasearch", "env": "SEARXNG_URL" },
+    { "id": "native", "enabled": true, "type": "existing-provider" }
+  ],
+  "crawl": {
+    "maxPagesPerQuery": 20,
+    "maxDepth": 2,
+    "concurrency": 4,
+    "requestTimeoutMs": 15000,
+    "followPagination": true,
+    "respectRobotsTxt": true,
+    "playwrightFallback": true
+  },
+  "extraction": {
+    "mainText": true,
+    "metadata": true,
+    "fundingSignals": true,
+    "deadlineSignals": true,
+    "eligibilitySignals": true,
+    "applicationLinks": true
+  },
+  "deduplication": {
+    "canonicalUrl": true,
+    "providerAndTitle": true,
+    "titleSimilarity": true,
+    "preserveOriginalUrl": true
+  },
+  "diagnostics": {
+    "recordQueries": true,
+    "recordProviders": true,
+    "recordBlockedPages": true,
+    "recordExtractionFailures": true,
+    "recordDuplicateReasons": true
+  }
+}
