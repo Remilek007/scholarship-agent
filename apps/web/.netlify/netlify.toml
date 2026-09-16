@@ -1,0 +1,58 @@
+functionsDirectory = "C:\\Users\\_\\scholarship-agent\\netlify\\functions"
+functionsDirectoryOrigin = "config"
+redirectsOrigin = "config"
+plugins = []
+headers = []
+
+[build]
+publish = "C:\\Users\\_\\scholarship-agent\\apps\\web\\dist"
+publishOrigin = "config"
+commandOrigin = "config"
+command = "pnpm install --no-frozen-lockfile && pnpm --filter @scholarship-agent/web build"
+base = "C:\\Users\\_\\scholarship-agent"
+functions = "C:\\Users\\_\\scholarship-agent\\netlify\\functions"
+
+[build.environment]
+NODE_VERSION = "24"
+NPM_FLAGS = "--version"
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
+
+[functions]
+
+[functions."*"]
+node_bundler = "esbuild"
+
+[[redirects]]
+from = "/api/*"
+to = "/.netlify/functions/api/:splat"
+status = 200.0
+force = true
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]

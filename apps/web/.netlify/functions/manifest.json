@@ -1,0 +1,1 @@
+{"functions":[{"bundler":"esbuild","buildData":{"runtimeAPIVersion":1},"mainFile":"C:\\Users\\_\\scholarship-agent\\netlify\\functions\\api.ts","name":"api","priority":10,"runtimeVersion":"nodejs20.x","path":"C:\\Users\\_\\scholarship-agent\\apps\\web\\.netlify\\functions\\api.zip","runtime":"js"}],"system":{"arch":"x64","platform":"win32"},"timestamp":1789573897836,"version":1}
