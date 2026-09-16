@@ -20,7 +20,7 @@ export function rankCandidates(profile: ApplicantProfile, candidates: Scholarshi
       : 0.5;
     const deadline = deadlineScore(candidate.deadline);
     const eligibility = assessEligibility(profile, candidate);
-    const eligibilityGate = gate(candidate, eligibility.status, field, funding);
+    const eligibilityGate = gate(profile, candidate, eligibility.status, field, funding);
 
     // Funding and confirmed hard exclusions are gates, not trade-offs. A highly
     // relevant but ineligible opportunity must never outrank a viable one.
@@ -28,8 +28,13 @@ export function rankCandidates(profile: ApplicantProfile, candidates: Scholarshi
       ? 0
       : field * 0.4 + funding * 0.25 + academic * 0.2 + deadline * 0.15;
 
+    const fieldReason = field >= 0.9
+      ? "Strong target-field relevance"
+      : field >= 0.6
+        ? "Related target-field relevance"
+        : "Weak target-field relevance";
     const reasons = [
-      field >= 0.9 ? "Strong Forestry/Wildlife field relevance" : field >= 0.6 ? "Related environmental field" : "Weak field relevance",
+      fieldReason,
       funding ? "Funding meets the minimum requirement" : "Funding is not verified as sufficient",
       deadline >= 0.8 ? "Deadline is active and relatively soon" : deadline > 0 ? "Deadline is active" : "Deadline is not yet known"
     ];
@@ -49,6 +54,7 @@ export function rankCandidates(profile: ApplicantProfile, candidates: Scholarshi
 }
 
 function gate(
+  profile: ApplicantProfile,
   candidate: ScholarshipCandidate,
   eligibility: ReturnType<typeof assessEligibility>["status"],
   field: number,
@@ -56,7 +62,7 @@ function gate(
 ): "pass" | "review" | "fail" {
   if (!funding) return "fail";
   if (eligibility === "not_eligible") return "fail";
-  if (candidate.degreeLevel === "phd" || candidate.degreeLevel === "undergraduate") return "fail";
+  if (candidate.degreeLevel && profile.degreeLevel !== "other" && candidate.degreeLevel !== profile.degreeLevel) return "fail";
   if (field < 0.35) return "review";
   if (eligibility === "cannot_determine") return "review";
   return "pass";
