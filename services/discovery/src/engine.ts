@@ -7,10 +7,7 @@ import { normalizeDiscoveryRecord } from "./normalize";
 import { deduplicateCandidates } from "./quality";
 import type { DiscoveryDiagnostics, DiscoveryRecord, ScholarshipSource } from "./index";
 
-export interface DiscoveryRunOptions {
-  deepEnrich?: boolean;
-  limit?: number;
-}
+export interface DiscoveryRunOptions { deepEnrich?: boolean; limit?: number; }
 
 export class DiscoveryEngine {
   constructor(private readonly sources: ScholarshipSource[]) {}
@@ -23,27 +20,19 @@ export class DiscoveryEngine {
   async searchWithDiagnostics(profile: ApplicantProfile, explicitQueries?: string[]): Promise<{ records: DiscoveryRecord[]; diagnostics: DiscoveryDiagnostics }> {
     const queries = explicitQueries?.length ? explicitQueries : planDiscoveryQueries(profile).map(item => item.query);
     const diagnostics: DiscoveryDiagnostics = {
-      queries: queries.length,
-      sourcesConfigured: this.sources.length,
-      sourcesHealthy: 0,
+      queries: queries.length, sourcesConfigured: this.sources.length, sourcesHealthy: 0,
       registrySources: this.sources.filter(source => source.name === "source-registry").length,
       providerSources: this.sources.filter(source => source.name !== "source-registry" && source.name !== "configured-direct-pages").length,
-      rawRecords: 0,
-      uniqueRecords: 0,
-      selectedForEnrichment: 0,
-      enriched: 0,
-      verified: 0,
-      enrichmentErrors: 0,
-      providerErrors: [],
-      sourceHealth: [],
-      sourceResults: []
+      rawRecords: 0, uniqueRecords: 0, selectedForEnrichment: 0, enriched: 0, verified: 0,
+      enrichmentErrors: 0, discovered: 0, extracted: 0, eligible: 0, reviewNeeded: 0,
+      crawlPagesVisited: 0, crawlFailures: 0, providerErrors: [], sourceHealth: [], sourceResults: [], crawlErrors: []
     };
 
     const health = await this.health();
     diagnostics.sourceHealth = health.sources;
     diagnostics.sourcesHealthy = health.healthy;
-
     const records: DiscoveryRecord[] = [];
+
     for (const source of this.sources) {
       const sourceQueries = source.runOnce ? [queries[0] ?? "scholarship"] : queries;
       let sourceRecords = 0;
@@ -53,6 +42,12 @@ export class DiscoveryEngine {
           const found = await source.search(query);
           records.push(...found);
           sourceRecords += found.length;
+          const extra = source.diagnostics?.();
+          if (extra) {
+            diagnostics.crawlPagesVisited += extra.pagesVisited ?? 0;
+            for (const failure of extra.failures ?? []) diagnostics.crawlErrors.push({ source: source.name, ...failure });
+            diagnostics.crawlFailures += extra.failures?.length ?? 0;
+          }
         } catch (error) {
           sourceErrors += 1;
           diagnostics.providerErrors.push({ source: source.name, query, error: error instanceof Error ? error.message : "Unknown discovery error" });
@@ -64,6 +59,8 @@ export class DiscoveryEngine {
     diagnostics.rawRecords = records.length;
     const unique = uniqueDiscoveryRecords(records);
     diagnostics.uniqueRecords = unique.length;
+    diagnostics.discovered = unique.filter(record => (record.discoveryState ?? "discovered") === "discovered").length;
+    diagnostics.extracted = unique.filter(record => record.discoveryState === "extracted").length;
     return { records: unique, diagnostics };
   }
 
@@ -87,65 +84,65 @@ export class DiscoveryEngine {
     }
 
     const candidates = deduplicateCandidates(enriched.map(item => item.candidate as ScholarshipCandidate));
+    const eligible: ScholarshipCandidate[] = [];
+    for (const candidate of candidates) {
+      const scored = scoreCandidate(profile, candidate);
+      if (scored.eligibility === "not_eligible") continue;
+      eligible.push(candidate);
+    }
+    diagnostics.eligible = eligible.length;
+    diagnostics.reviewNeeded = candidates.length - eligible.length;
+
     const repository = process.env.DATABASE_URL ? createScholarshipRepository(process.env.DATABASE_URL) : undefined;
     let persisted = 0;
     if (repository) {
-      for (const record of selected) {
-        await repository.recordDiscovery({ url: record.url, title: record.title, source: record.source, discoveryMethod: record.discoveryMethod, query: record.query });
-      }
-      for (const candidate of candidates) {
-        const scored = scoreCandidate(profile, candidate);
-        if (scored.eligibility === "not_eligible") continue;
+      for (const record of selected) await repository.recordDiscovery({ url: record.url, title: record.title, source: record.source, discoveryMethod: record.discoveryMethod, query: record.query });
+      for (const candidate of eligible) {
         await repository.upsertScholarship({
-          canonicalKey: `${candidate.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}::${(candidate.provider ?? "").toLowerCase()}`,
-          title: candidate.title,
-          provider: candidate.provider,
-          university: candidate.university,
-          country: candidate.country,
-          degreeLevel: candidate.degreeLevel,
-          opportunityType: candidate.opportunityType,
-          fields: candidate.fields,
-          sourceUrl: candidate.sourceUrl,
-          applicationUrl: candidate.applicationUrl,
-          fundingClass: candidate.fundingClass,
-          deadline: candidate.deadline,
-          eligibility: candidate.eligibility,
-          requirements: candidate.requirements,
-          evidence: candidate.evidence
+          canonicalKey: canonicalCandidateKey(candidate), title: candidate.title, provider: candidate.provider,
+          university: candidate.university, country: candidate.country, degreeLevel: candidate.degreeLevel,
+          opportunityType: candidate.opportunityType, fields: candidate.fields, sourceUrl: candidate.sourceUrl,
+          applicationUrl: candidate.applicationUrl, fundingClass: candidate.fundingClass, deadline: candidate.deadline,
+          eligibility: candidate.eligibility, requirements: candidate.requirements, evidence: candidate.evidence
         });
         persisted += 1;
       }
     }
 
-    return {
-      profile,
-      records: candidates,
-      count: candidates.length,
-      persisted,
-      diagnostics,
-      generatedAt: new Date().toISOString()
-    };
+    return { profile, records: candidates, count: candidates.length, persisted, diagnostics, generatedAt: new Date().toISOString() };
   }
 }
 
 function uniqueDiscoveryRecords(records: DiscoveryRecord[]): DiscoveryRecord[] {
-  const seen = new Set<string>();
-  return records.filter(record => {
+  const seen = new Map<string, DiscoveryRecord>();
+  for (const record of records) {
     const key = canonicalUrl(record.url);
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    if (!key) continue;
+    const existing = seen.get(key);
+    if (!existing || recordCompleteness(record) > recordCompleteness(existing)) seen.set(key, { ...record, url: key });
+  }
+  const byIdentity = new Map<string, DiscoveryRecord>();
+  for (const record of seen.values()) {
+    const identity = `${normalizeText(record.title)}::${normalizeText((record as any).provider ?? record.source)}`;
+    const existing = byIdentity.get(identity);
+    if (!existing || recordCompleteness(record) > recordCompleteness(existing)) byIdentity.set(identity, record);
+  }
+  return [...byIdentity.values()];
 }
+
+function recordCompleteness(record: DiscoveryRecord): number {
+  return [record.title, record.snippet, record.sourceUrl, record.originalUrl, record.sourceEngine, record.discoveryState].filter(Boolean).length;
+}
+
+function normalizeText(value: unknown): string { return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
+function canonicalCandidateKey(candidate: ScholarshipCandidate): string { return `${normalizeText(candidate.title)}::${normalizeText(candidate.provider)}`; }
 
 function canonicalUrl(value: string): string {
   try {
     const url = new URL(value.trim());
     url.hash = "";
     url.hostname = url.hostname.toLowerCase();
-    for (const key of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid"]) url.searchParams.delete(key);
+    for (const key of [...url.searchParams.keys()]) if (/^(utm_|fbclid$|gclid$|mc_cid$|mc_eid$)/i.test(key)) url.searchParams.delete(key);
     return url.toString().replace(/\/$/, "");
-  } catch {
-    return value.trim().toLowerCase().replace(/\/$/, "");
-  }
+  } catch { return value.trim().toLowerCase().replace(/\/$/, ""); }
 }

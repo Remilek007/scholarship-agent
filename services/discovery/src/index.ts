@@ -8,6 +8,8 @@ export interface DiscoveryRecord {
   query?: string;
   originalUrl?: string;
   sourceEngine?: string;
+  discoveryState?: "discovered" | "extracted" | "eligible" | "review-needed" | "rejected";
+  failureReason?: string;
 }
 
 export interface ScholarshipSource {
@@ -15,6 +17,7 @@ export interface ScholarshipSource {
   readonly runOnce?: boolean;
   search(query: string): Promise<DiscoveryRecord[]>;
   healthCheck?(): Promise<boolean>;
+  diagnostics?(): { pagesVisited?: number; failures?: Array<{ url: string; error: string; stage: string }> } | undefined;
 }
 
 export { DiscoveryEngine } from "./engine";
@@ -39,4 +42,6 @@ export { assessOpportunityQuality, deduplicateCandidates } from "./quality";
 export type { QualityAssessment } from "./quality";
 export { createDiscoveryScheduler, readScheduledProfile } from "./scheduler";
 export type { DiscoverySchedulerStatus } from "./scheduler";
+export { crawlDiscoveryPages } from "./crawler";
+export type { CrawlOptions, CrawlResult } from "./crawler";
 export type { DiscoveryDiagnostics } from "./diagnostics";
