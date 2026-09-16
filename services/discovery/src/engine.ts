@@ -129,7 +129,7 @@ export class DiscoveryEngine {
           university: candidate.university, country: candidate.country, degreeLevel: candidate.degreeLevel,
           opportunityType: candidate.opportunityType, fields: candidate.fields, sourceUrl: candidate.sourceUrl,
           applicationUrl: candidate.applicationUrl, fundingClass: candidate.fundingClass, deadline: candidate.deadline,
-          eligibility: candidate.eligibility, requirements: candidate.requirements, evidence: candidate.evidence
+          eligibility: candidate.eligibility, requirements: candidate.requirements
         });
         persisted += 1;
       }
@@ -153,7 +153,7 @@ function uniqueDiscoveryRecords(records: DiscoveryRecord[]): DiscoveryRecord[] {
     const title = normalizeText(record.title);
     const host = hostOf(record.url);
     const provider = normalizeText((record as DiscoveryRecord & { provider?: string }).provider ?? host ?? record.source);
-    const identity = title ? `${title}::${provider}` : `${canonicalUrl(record.url)}`;
+    const identity = title ? `${title}::${provider}` : canonicalUrl(record.url);
     const existing = byIdentity.get(identity);
     if (!existing || recordCompleteness(record) > recordCompleteness(existing)) byIdentity.set(identity, record);
   }
@@ -166,7 +166,6 @@ function recordCompleteness(record: DiscoveryRecord): number {
 
 function normalizeText(value: unknown): string { return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " "); }
 function canonicalCandidateKey(candidate: ScholarshipCandidate): string { return `${normalizeText(candidate.title)}::${normalizeText(candidate.provider)}`; }
-
 function hostOf(value: string): string | undefined { try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); } catch { return undefined; } }
 
 function canonicalUrl(value: string): string {
