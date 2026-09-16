@@ -1,6 +1,8 @@
 import type { SearchProvider } from "@scholarship-agent/search";
 import { BraveSearchProvider, PublicSearchProvider, RssSearchProvider, TavilySearchProvider } from "@scholarship-agent/search";
-import { DiscoveryEngine, type DiscoveryRecord, type ScholarshipSource, RegistrySource, getEnabledSourceRegistry, getSourceRegistryUrls } from "./index";
+import { DiscoveryEngine } from "./engine";
+import type { DiscoveryRecord, ScholarshipSource } from "./index";
+import { RegistrySource, getEnabledSourceRegistry, getSourceRegistryUrls } from "./index";
 import { loadDiscoveryConfig } from "./config";
 import { HttpPageSource } from "./http";
 import { discoverBroadly } from "./open-source-discovery";
