@@ -1,11 +1,22 @@
 [build]
-  base = "apps/web"
-  command = "pnpm build"
-  publish = "dist"
+  base = "."
+  command = "pnpm install --no-frozen-lockfile && pnpm --filter @scholarship-agent/web build"
+  publish = "apps/web/dist"
 
 [build.environment]
   NODE_VERSION = "24"
   NPM_FLAGS = "--version"
+
+[functions]
+  directory = "services/api/netlify/functions"
+  node_bundler = "esbuild"
+  external_node_modules = ["express", "serverless-http"]
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
 
 [[redirects]]
   from = "/*"
