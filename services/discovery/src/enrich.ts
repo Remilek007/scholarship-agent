@@ -7,11 +7,12 @@ import { verifySource, type VerificationResult } from "./verification";
 import type { ExtractedRequirement } from "./requirements";
 
 export interface EnrichedDiscoveryRecord { record:DiscoveryRecord; candidate:NormalizedScholarship; extraction?:DeepExtractionResult; verification?:VerificationResult; enrichmentError?:string; }
-const MAX_ENRICH=40, CONCURRENCY=5, MAX_SECONDARY_RECORDS=24, MAX_SECONDARY_LINKS=3;
+export const MAX_ENRICHMENT_RECORDS = 100;
+const CONCURRENCY=5, MAX_SECONDARY_RECORDS=24, MAX_SECONDARY_LINKS=3;
 const LINK_TERMS=/funding|scholarship|studentship|stipend|tuition|eligib|requirement|admission|programme|program|research|supervisor|graduate|master|MSc|apply/i;
 
-export async function enrichDiscoveryRecords(profile:ApplicantProfile,records:DiscoveryRecord[],limit=MAX_ENRICH):Promise<EnrichedDiscoveryRecord[]>{
- const selected=records.slice(0,Math.max(1,Math.min(limit,100)));const results:EnrichedDiscoveryRecord[]=new Array(selected.length);let cursor=0;
+export async function enrichDiscoveryRecords(profile:ApplicantProfile,records:DiscoveryRecord[],limit=MAX_ENRICHMENT_RECORDS):Promise<EnrichedDiscoveryRecord[]>{
+ const selected=records.slice(0,Math.max(1,Math.min(limit,MAX_ENRICHMENT_RECORDS)));const results:EnrichedDiscoveryRecord[]=new Array(selected.length);let cursor=0;
  async function worker(){while(true){const index=cursor++;if(index>=selected.length)return;const record=selected[index];try{
   let extraction=await deepExtractPage(record.url);
   if(index<MAX_SECONDARY_RECORDS) extraction=await expandExtraction(extraction);
@@ -30,7 +31,7 @@ export async function expandExtraction(primary:DeepExtractionResult):Promise<Dee
  const links=primary.links.filter(link=>hostOf(link.url)===hostname&&LINK_TERMS.test(`${link.label} ${link.url}`)).slice(0,MAX_SECONDARY_LINKS);
  if(!links.length)return primary;
  const secondary=await Promise.allSettled(links.map(link=>deepExtractPage(link.url)));
- const pages=secondary.flatMap(result=>result.status==="fulfilled"?[result.value]:[]);
+ const pages=secondary.flatMap(result=>result.status==="fulfilled"? [result.value]:[]);
  if(!pages.length)return primary;
  const allText=[primary.text,...pages.map(page=>page.text)].join(" ").slice(0,50000);
  const requirements=mergeRequirements(primary.requirements,pages.flatMap(page=>page.requirements));
