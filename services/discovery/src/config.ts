@@ -6,19 +6,21 @@ export interface DiscoveryConfig {
   braveSearchApiKey?: string;
   tavilyApiKey?: string;
   searxngUrl?: string;
+  searxngEngines?: string[];
   maxPages: number;
   maxDepth: number;
   concurrency: number;
+  requestTimeoutMs: number;
   playwrightEnabled: boolean;
 }
 
 function list(value?: string): string[] {
-  return (value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+  return (value ?? "").split(",").map(item => item.trim()).filter(Boolean);
 }
 
 function numberValue(value: string | undefined, fallback: number, minimum: number): number {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= minimum ? parsed : fallback;
+  return Number.isFinite(parsed) && parsed >= minimum ? Math.floor(parsed) : fallback;
 }
 
 function booleanValue(value: string | undefined, fallback: boolean): boolean {
@@ -35,9 +37,11 @@ export function loadDiscoveryConfig(env: NodeJS.ProcessEnv = process.env): Disco
     braveSearchApiKey: env.BRAVE_SEARCH_API_KEY?.trim() || undefined,
     tavilyApiKey: env.TAVILY_API_KEY?.trim() || undefined,
     searxngUrl: env.SEARXNG_URL?.trim().replace(/\/$/, "") || undefined,
+    searxngEngines: list(env.SEARXNG_ENGINES),
     maxPages: numberValue(env.DISCOVERY_MAX_PAGES, 250, 1),
-    maxDepth: numberValue(env.DISCOVERY_MAX_DEPTH, 2, 0),
+    maxDepth: numberValue(env.DISCOVERY_MAX_DEPTH, 3, 0),
     concurrency: numberValue(env.DISCOVERY_CONCURRENCY, 6, 1),
+    requestTimeoutMs: numberValue(env.DISCOVERY_REQUEST_TIMEOUT_MS, 20_000, 1_000),
     playwrightEnabled: booleanValue(env.DISCOVERY_PLAYWRIGHT_ENABLED, false)
   };
 }
