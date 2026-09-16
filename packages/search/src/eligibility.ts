@@ -34,10 +34,14 @@ export function assessEligibility(profile: ApplicantProfile, candidate: Scholars
     return { status: "not_eligible", confidence: 0.99, reasons: [`Opportunity is for ${candidate.degreeLevel}, not ${profile.degreeLevel}`] };
   }
 
+  if (candidate.country && profile.excludedCountries?.some((country) => samePlace(country, candidate.country))) {
+    return { status: "not_eligible", confidence: 0.98, reasons: [`Opportunity country (${candidate.country}) is excluded by the applicant`] };
+  }
+
   const degreeTerms = degreeAliases[profile.degreeLevel] ?? [];
   const hasDegreeSignal = profile.degreeLevel === "other" || degreeTerms.some((term) => text.includes(term));
   if (profile.degreeLevel !== "other") {
-    const degreeLabel = profile.degreeLevel === "masters" ? "Master's" : profile.degreeLevel === "phd" ? "PhD" : "undergraduate";
+    const degreeLabel = profile.degreeLevel === "masters" ? "Master's" : profile.degreeLevel === "phd" ? "PhD" : "Undergraduate";
     reasons.push(hasDegreeSignal ? `${degreeLabel}-level study is indicated` : `${degreeLabel} level is not explicitly confirmed yet`);
   }
 
@@ -45,10 +49,10 @@ export function assessEligibility(profile: ApplicantProfile, candidate: Scholars
   const nationality = profile.nationality.trim().toLowerCase();
   const eligible = (evidence?.eligibleNationalities ?? []).map((v) => v.toLowerCase());
   const excluded = (evidence?.excludedNationalities ?? []).map((v) => v.toLowerCase());
-  if (excluded.some((v) => v === nationality || v.includes(nationality) || nationality.includes(v))) {
+  if (excluded.some((v) => samePlace(v, nationality))) {
     return { status: "not_eligible", confidence: 0.98, reasons: [`Applicant nationality (${profile.nationality}) is explicitly excluded`] };
   }
-  if (eligible.some((v) => v === nationality || v.includes(nationality) || nationality.includes(v))) {
+  if (eligible.some((v) => samePlace(v, nationality))) {
     reasons.push(`Applicant nationality (${profile.nationality}) is explicitly eligible`);
     confidence += 0.2;
   } else if (evidence?.internationalStudents || /international students|all nationalities|any nationality|open to international applicants/.test(text)) {
@@ -88,13 +92,17 @@ export function assessEligibility(profile: ApplicantProfile, candidate: Scholars
   return { status, confidence, reasons };
 }
 
+function samePlace(left: string, right: string): boolean {
+  const a = left.trim().toLowerCase();
+  const b = right.trim().toLowerCase();
+  return Boolean(a && b && (a === b || a.includes(b) || b.includes(a)));
+}
+
 export function extractEligibilityEvidence(text: string) {
   const normalized = text.toLowerCase();
   const internationalStudents = /international students|international applicants|all nationalities|any nationality|open to international/.test(normalized);
-  const eligibleNationalities: string[] = [];
-  if (/nigeria|nigerian/.test(normalized)) eligibleNationalities.push("Nigeria");
-  const excludedNationalities: string[] = [];
-  if (/not eligible.*nigeria|nigeria.*not eligible|excluding.*nigeria/.test(normalized)) excludedNationalities.push("Nigeria");
+  const eligibleNationalities = extractNationalityList(normalized, false);
+  const excludedNationalities = extractNationalityList(normalized, true);
 
   const minimumMatch = normalized.match(/(?:minimum|at least|required|equivalent to)\s*(?:a\s*)?(?:gpa|cgpa|grade point average)?\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:\/\s*(\d+(?:\.\d+)?))?/i);
   return {
@@ -105,4 +113,26 @@ export function extractEligibilityEvidence(text: string) {
     academicScale: minimumMatch?.[2] ? Number(minimumMatch[2]) : undefined,
     text
   };
+}
+
+function extractNationalityList(text: string, excluded: boolean): string[] {
+  const patterns = excluded
+    ? [/(?:not eligible|ineligible|excluding|excluded|except(?: for)?)\s+(?:for\s+)?(?:citizens?|nationals?|residents?)?\s*(?:of|from)?\s*([^.;\n]+)/gi]
+    : [/(?:eligible|eligibility|available)\s+(?:to|for)?\s*(?:citizens?|nationals?|residents?)?\s*(?:of|from)\s+([^.;\n]+)/gi, /(?:citizens?|nationals?|residents?)\s+(?:of|from)\s+([^.;\n]+)/gi];
+  const values: string[] = [];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const segment = match[1]?.replace(/\([^)]*\)/g, "").trim();
+      if (!segment || /all countries|all nationalities|international|any nationality/.test(segment)) continue;
+      for (const value of segment.split(/,|\s+and\s+|\s+or\s+/)) {
+        const cleaned = value.trim().replace(/^(the|all)\s+/i, "").replace(/\s+(only|applicants?)$/i, "");
+        if (cleaned.length >= 3 && cleaned.length <= 60 && /^[a-z][a-z .'-]+$/i.test(cleaned)) values.push(toDisplayNationality(cleaned));
+      }
+    }
+  }
+  return [...new Set(values)];
+}
+
+function toDisplayNationality(value: string): string {
+  return value.split(/\s+/).map(part => part ? part[0].toUpperCase() + part.slice(1) : part).join(" ");
 }
