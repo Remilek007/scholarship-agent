@@ -1,3 +1,23 @@
+export interface DiscoveryRecord {
+  url: string;
+  sourceUrl?: string;
+  title?: string;
+  snippet?: string;
+  source: string;
+  discoveryMethod: string;
+  query?: string;
+  originalUrl?: string;
+  sourceEngine?: string;
+}
+
+export interface ScholarshipSource {
+  readonly name: string;
+  readonly runOnce?: boolean;
+  search(query: string): Promise<DiscoveryRecord[]>;
+  healthCheck?(): Promise<boolean>;
+}
+
+export { DiscoveryEngine } from "./engine";
 export * from "./discovery-enhancements";
 export * from "./open-source-discovery";
 export { createDiscoveryEngine } from "./factory";
