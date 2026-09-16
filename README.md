@@ -11,22 +11,60 @@ The workflow is:
 ```text
 Applicant profile / CV
         ↓
-Broad scholarship + studentship + research-position discovery
+Federated discovery (SearXNG + official registries + RSS/API providers)
         ↓
-Deduplication + funding classification
+Canonicalization + multi-source deduplication
         ↓
-Eligibility analysis
+Deep page extraction + structured-data extraction
+        ↓
+Funding + deadline + eligibility evidence
         ↓
 Field / academic / profile matching
         ↓
-Requirement extraction
+Requirement extraction + source verification
         ↓
-Funding + deadline + source verification
-        ↓
-Ranked scholarship intelligence
+Ranked scholarship intelligence + diagnostics
         ↓
 Applicant opens the official source and applies manually
 ```
+
+## Discovery architecture
+
+The discovery service is deliberately provider-neutral. It can combine:
+
+- **SearXNG** for broad multi-engine web discovery when `SEARXNG_URL` is configured.
+- The existing Brave, Tavily, generic-search and RSS adapters.
+- An official-source registry covering government scholarship programmes, international organisations, research ecosystems and scholarship directories.
+- Sitemap discovery plus bounded same-domain crawling for registry seeds.
+- Deep HTML/JSON-LD extraction for application links, deadlines, funding evidence, eligibility evidence and requirements.
+- Canonical URL normalization that removes tracking parameters while preserving the original discovered URL.
+- Candidate deduplication before enrichment and persistence.
+- Per-run diagnostics for queries, source health, provider failures, raw/unique records, enrichment and verification.
+
+The implementation uses bounded native HTTP crawling so the core service does not require a browser runtime. `DISCOVERY_PLAYWRIGHT_ENABLED` remains available for a future browser-backed adapter where a JavaScript-heavy source cannot be extracted with HTTP alone.
+
+### SearXNG setup
+
+Set the following environment variables for broad web discovery:
+
+```text
+SEARXNG_URL=http://localhost:8080
+SEARXNG_ENGINES=google,bing,brave,duckduckgo
+```
+
+If `SEARXNG_URL` is empty, the system continues using the other configured discovery providers and the official source registry.
+
+### Discovery controls
+
+```text
+DISCOVERY_MAX_PAGES=250
+DISCOVERY_MAX_DEPTH=3
+DISCOVERY_CONCURRENCY=6
+DISCOVERY_REQUEST_TIMEOUT_MS=20000
+DISCOVERY_PLAYWRIGHT_ENABLED=false
+```
+
+These bounds keep discovery from turning into an unbounded crawler. Increase them gradually on a deployment with sufficient resources.
 
 ## What the system analyzes
 
@@ -55,6 +93,16 @@ For each opportunity, the dashboard is designed to surface:
 The CV/document analyzer remains useful for discovery and matching. It extracts supported facts such as degree, CGPA, academic field, technical skills and research/work evidence so the search can become more precise. Extracted facts are presented for review before being used in the search profile.
 
 It does **not** create application answers or submit anything.
+
+## API discovery endpoints
+
+- `GET /api/discovery/health` — source health overview.
+- `GET /api/discovery/status` — scheduler state.
+- `GET /api/discovery/sources` — enabled registry sources.
+- `POST /api/discovery/plan` — generate the expanded query plan for a profile.
+- `POST /api/discovery/search` — run federated discovery and return diagnostics.
+- `POST /api/discovery/run` — discover, enrich, deduplicate and persist opportunities.
+- `POST /api/discovery/run-scheduled` — execute the configured scheduled profile.
 
 ## Manual application boundary
 
