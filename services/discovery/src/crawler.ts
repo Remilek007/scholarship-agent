@@ -71,7 +71,8 @@ export async function crawlDiscoveryPages(seedUrls: string[], query: string, opt
   if (seeds.length) await crawler.run(seeds.map(url => ({ url, userData: { depth: 0 } })));
 
   if (options.playwrightEnabled) {
-    const browserUrls = [...browserCandidates].filter(isHttpUrl).slice(0, Math.max(0, maxRequests - Math.min(visited.size, maxRequests)) || browserCandidates.size);
+    const remainingBrowser = Math.max(0, maxRequests - visited.size);
+    const browserUrls = [...browserCandidates].filter(isHttpUrl).slice(0, remainingBrowser);
     if (browserUrls.length) {
       const browser = new PlaywrightCrawler({
         maxRequestsPerCrawl: browserUrls.length,
