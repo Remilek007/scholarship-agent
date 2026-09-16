@@ -1,4 +1,5 @@
 export * from "./discovery-enhancements";
+export * from "./open-source-discovery";
 export { createDiscoveryEngine } from "./factory";
 export { HttpPageSource } from "./http";
 export { RegistrySource } from "./registry-source";
