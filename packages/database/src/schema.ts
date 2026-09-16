@@ -34,13 +34,20 @@ export const scholarshipSources = pgTable("scholarship_sources", {
 export const discoveryRecords = pgTable("discovery_records", {
   id: uuid("id").defaultRandom().primaryKey(),
   url: text("url").notNull(),
+  originalUrl: text("original_url"),
   title: text("title"),
   source: text("source").notNull(),
+  sourceEngine: text("source_engine"),
   discoveryMethod: text("discovery_method").notNull(),
   query: text("query"),
   status: text("status").notNull().default("unprocessed"),
+  failureReason: text("failure_reason"),
   discoveredAt: timestamp("discovered_at", { withTimezone: true }).defaultNow().notNull()
-});
+}, (table) => ({
+  urlIndex: index("discovery_records_url_idx").on(table.url),
+  statusIndex: index("discovery_records_status_idx").on(table.status),
+  sourceIndex: index("discovery_records_source_idx").on(table.source)
+}));
 
 export const scholarshipFunding = pgTable("scholarship_funding", {
   scholarshipId: uuid("scholarship_id").primaryKey(),
