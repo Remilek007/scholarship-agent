@@ -1,4 +1,5 @@
 import { extractApplicationRequirements, type ExtractedRequirement } from "./requirements";
+import { fetchRenderedHtml } from "./runtime-render";
 
 export interface DeepExtractionResult {
   sourceUrl: string;
@@ -20,7 +21,7 @@ export interface DeepExtractionResult {
 
 const MAX_TEXT = 30_000;
 const MAX_EVIDENCE = 8;
-const DATE_PATTERN = /(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{4}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:,)?\s+\d{4})/i;
+const DATE_PATTERN = /(?:\d{4}[-\/]\d{1,2}[-\/]\d{1,2}|\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:,)?\s+\d{4})/i;
 
 export async function deepExtractPage(sourceUrl: string): Promise<DeepExtractionResult> {
   const extractedAt = new Date().toISOString();
@@ -31,8 +32,11 @@ export async function deepExtractPage(sourceUrl: string): Promise<DeepExtraction
   });
   if (!response.ok) throw new Error(`Source returned HTTP ${response.status}`);
 
-  const finalUrl = response.url || sourceUrl;
-  const html = await response.text();
+  const initialFinalUrl = response.url || sourceUrl;
+  const initialHtml = await response.text();
+  const rendered = await fetchRenderedHtml(initialFinalUrl, initialHtml);
+  const finalUrl = rendered.finalUrl || initialFinalUrl;
+  const html = rendered.html;
   const structured = extractStructuredData(html);
   const text = visibleText(html, structured).slice(0, MAX_TEXT);
   const links = extractLinks(html, finalUrl);
