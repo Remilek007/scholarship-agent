@@ -33,8 +33,9 @@ export function assessEligibility(profile: ApplicantProfile, candidate: Scholars
   if (candidate.degreeLevel && profile.degreeLevel !== "other" && candidate.degreeLevel !== profile.degreeLevel) {
     return { status: "not_eligible", confidence: 0.99, reasons: [`Opportunity is for ${candidate.degreeLevel}, not ${profile.degreeLevel}`] };
   }
-  if (candidate.country && profile.excludedCountries?.some((country) => samePlace(country, candidate.country))) {
-    return { status: "not_eligible", confidence: 0.98, reasons: [`Opportunity country (${candidate.country}) is excluded by the applicant`] };
+  const opportunityCountry = candidate.country;
+  if (opportunityCountry && profile.excludedCountries?.some((country) => samePlace(country, opportunityCountry))) {
+    return { status: "not_eligible", confidence: 0.98, reasons: [`Opportunity country (${opportunityCountry}) is excluded by the applicant`] };
   }
 
   const degreeTerms = degreeAliases[profile.degreeLevel] ?? [];
