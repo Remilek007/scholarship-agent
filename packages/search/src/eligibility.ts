@@ -1,6 +1,6 @@
 import type { ApplicantProfile, DegreeLevel, EligibilityStatus, ScholarshipCandidate } from "@scholarship-agent/shared";
-import { isFundedEnough } from "./funding.ts";
-import { scoreFieldRelevance } from "./relevance.ts";
+import { isFundedEnough } from "./funding";
+import { scoreFieldRelevance } from "./relevance";
 
 export interface EligibilityAssessment { status: EligibilityStatus; confidence: number; reasons: string[]; }
 const degreeAliases: Record<DegreeLevel, string[]> = { masters: ["master", "master's", "msc", "m.sc", "ma", "graduate"], phd: ["phd", "doctorate", "doctoral"], undergraduate: ["bachelor", "bachelor's", "bsc", "b.sc", "undergraduate"], other: [] };
