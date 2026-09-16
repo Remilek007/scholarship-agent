@@ -1,7 +1,7 @@
 {
-  "version": 2,
+  "version": 3,
   "strategy": "federated-hybrid",
-  "description": "Broad, evidence-first scholarship discovery using metasearch, direct sources, bounded crawling, extraction, deduplication, and diagnostics.",
+  "description": "Broad, evidence-first scholarship discovery using metasearch, official registries, bounded crawling, extraction, deduplication, verification, and diagnostics.",
   "providers": [
     { "id": "searxng", "enabled": true, "type": "metasearch", "env": "SEARXNG_URL" },
     { "id": "native", "enabled": true, "type": "existing-provider" },
@@ -13,7 +13,8 @@
     "includeFundingVariants": true,
     "includeResearchPositionVariants": true,
     "includeCountryAndNationalityVariants": true,
-    "maxQueriesPerProfile": 24
+    "includeOfficialDomainVariants": true,
+    "maxQueriesPerProfile": 36
   },
   "crawl": {
     "maxPagesPerQuery": 40,
