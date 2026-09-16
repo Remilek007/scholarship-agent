@@ -10,6 +10,8 @@ import type { DiscoveryDiagnostics, DiscoveryRecord, ScholarshipSource } from ".
 
 export interface DiscoveryRunOptions { deepEnrich?: boolean; limit?: number; }
 
+const MAX_ENRICHMENT_RECORDS = 100;
+
 export class DiscoveryEngine {
   constructor(private readonly sources: ScholarshipSource[]) {}
 
@@ -72,11 +74,14 @@ export class DiscoveryEngine {
     const limit = Math.max(1, Math.min(options.limit ?? config.maxPages, 500));
     const selected = searched.records.slice(0, limit);
     const diagnostics = searched.diagnostics;
-    diagnostics.selectedForEnrichment = options.deepEnrich === false ? 0 : Math.min(selected.length, config.maxPages);
+    const enrichmentLimit = options.deepEnrich === false
+      ? 0
+      : Math.min(selected.length, MAX_ENRICHMENT_RECORDS);
+    diagnostics.selectedForEnrichment = enrichmentLimit;
 
     let enriched = selected.map(record => ({ record, candidate: normalizeDiscoveryRecord(record) }));
     if (options.deepEnrich !== false) {
-      const results = await enrichDiscoveryRecords(profile, selected, diagnostics.selectedForEnrichment);
+      const results = await enrichDiscoveryRecords(profile, selected, enrichmentLimit);
       enriched = results.map(result => {
         if (result.enrichmentError) diagnostics.enrichmentErrors += 1;
         if (result.verification) diagnostics.verified += 1;
