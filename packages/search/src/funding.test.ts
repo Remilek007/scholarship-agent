@@ -8,9 +8,14 @@ test("classifies explicit full funding", () => {
 });
 
 test("rejects partial funding for a substantial minimum", () => {
-  const funding = classifyFunding({ tuitionCovered: true, stipendMentioned: false, text: "Tuition fee waiver available; living costs are self-funded." });
+  const funding = classifyFunding({ tuitionCovered: true, stipendMentioned: false, text: "Tuition fee waiver available." });
   assert.equal(funding, "partial");
   assert.equal(isFundedEnough(funding, "substantial"), false);
+});
+
+test("classifies explicit self-funded exclusions as unfunded", () => {
+  const funding = classifyFunding({ tuitionCovered: true, stipendMentioned: false, text: "Tuition fee waiver available; living costs are self-funded." });
+  assert.equal(funding, "unfunded");
 });
 
 test("requires full funding when applicant minimum is full", () => {
