@@ -1,7 +1,7 @@
 export interface DiscoverySourceDefinition {
   id: string;
   name: string;
-  category: "university" | "government" | "foundation" | "international" | "research" | "scholarship_database" | "search";
+  category: "university" | "government" | "foundation" | "international" | "research" | "scholarship_database" | "job_board" | "search";
   urls: string[];
   priority: number;
   enabledByDefault: boolean;
@@ -25,6 +25,9 @@ export const SOURCE_REGISTRY: DiscoverySourceDefinition[] = [
   { id: "mastersportal", name: "Mastersportal", category: "scholarship_database", urls: ["https://www.mastersportal.com/"], priority: 3, enabledByDefault: true, notes: "Master's program discovery; funding requires verification" },
   { id: "findaphd", name: "FindAPhD", category: "research", urls: ["https://www.findaphd.com/"], priority: 3, enabledByDefault: true, notes: "Research-position discovery" },
   { id: "euraxess", name: "EURAXESS", category: "research", urls: ["https://euraxess.ec.europa.eu/"], priority: 4, enabledByDefault: true, notes: "European research and funding discovery" },
+  { id: "jobs-ac-uk", name: "jobs.ac.uk", category: "job_board", urls: ["https://www.jobs.ac.uk/"], priority: 3, enabledByDefault: true, notes: "Academic jobs and funded postgraduate/research-position discovery; verify the host institution" },
+  { id: "nature-careers", name: "Nature Careers", category: "job_board", urls: ["https://www.nature.com/naturecareers"], priority: 3, enabledByDefault: true, notes: "Research and academic position discovery; verify funding at the host institution" },
+  { id: "academic-positions", name: "Academic Positions", category: "job_board", urls: ["https://academicpositions.com/"], priority: 3, enabledByDefault: true, notes: "Academic and research-position discovery; verify official institution" },
   { id: "researchgate", name: "ResearchGate", category: "research", urls: ["https://www.researchgate.net/"], priority: 2, enabledByDefault: false, notes: "Discovery only; never authoritative funding evidence" },
   { id: "unesco", name: "UNESCO", category: "international", urls: ["https://www.unesco.org/"], priority: 4, enabledByDefault: true, notes: "Education and science opportunities" },
   { id: "unep", name: "UNEP", category: "international", urls: ["https://www.unep.org/"], priority: 4, enabledByDefault: true, notes: "Environment and conservation ecosystem" },
