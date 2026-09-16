@@ -44,4 +44,6 @@ export { createDiscoveryScheduler, readScheduledProfile } from "./scheduler";
 export type { DiscoverySchedulerStatus } from "./scheduler";
 export { crawlDiscoveryPages } from "./crawler";
 export type { CrawlOptions, CrawlResult } from "./crawler";
+export { recordDiscoveryProvenance, persistDiscoveryRecords, persistEnrichedDiscoveryRecords } from "./persistence";
+export type { DiscoveryPersistenceInput } from "./persistence";
 export type { DiscoveryDiagnostics } from "./diagnostics";

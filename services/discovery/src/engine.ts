@@ -5,6 +5,7 @@ import { loadDiscoveryConfig } from "./config";
 import { enrichDiscoveryRecords } from "./enrich";
 import { normalizeDiscoveryRecord } from "./normalize";
 import { deduplicateCandidates } from "./quality";
+import { recordDiscoveryProvenance } from "./persistence";
 import type { DiscoveryDiagnostics, DiscoveryRecord, ScholarshipSource } from "./index";
 
 export interface DiscoveryRunOptions { deepEnrich?: boolean; limit?: number; }
@@ -13,7 +14,10 @@ export class DiscoveryEngine {
   constructor(private readonly sources: ScholarshipSource[]) {}
 
   async health(): Promise<{ sources: Array<{ name: string; healthy: boolean }>; healthy: number; total: number }> {
-    const results = await Promise.all(this.sources.map(async source => ({ name: source.name, healthy: source.healthCheck ? await source.healthCheck() : true })));
+    const results = await Promise.all(this.sources.map(async source => {
+      try { return { name: source.name, healthy: source.healthCheck ? await source.healthCheck() : true }; }
+      catch { return { name: source.name, healthy: false }; }
+    }));
     return { sources: results, healthy: results.filter(item => item.healthy).length, total: results.length };
   }
 
@@ -28,11 +32,7 @@ export class DiscoveryEngine {
       crawlPagesVisited: 0, crawlFailures: 0, providerErrors: [], sourceHealth: [], sourceResults: [], crawlErrors: []
     };
 
-    const health = await this.health();
-    diagnostics.sourceHealth = health.sources;
-    diagnostics.sourcesHealthy = health.healthy;
     const records: DiscoveryRecord[] = [];
-
     for (const source of this.sources) {
       const sourceQueries = source.runOnce ? [queries[0] ?? "scholarship"] : queries;
       let sourceRecords = 0;
@@ -54,7 +54,9 @@ export class DiscoveryEngine {
         }
       }
       diagnostics.sourceResults.push({ name: source.name, records: sourceRecords, errors: sourceErrors });
+      diagnostics.sourceHealth.push({ name: source.name, healthy: sourceErrors === 0 });
     }
+    diagnostics.sourcesHealthy = diagnostics.sourceHealth.filter(item => item.healthy).length;
 
     diagnostics.rawRecords = records.length;
     const unique = uniqueDiscoveryRecords(records);
@@ -85,25 +87,35 @@ export class DiscoveryEngine {
 
     const candidates = deduplicateCandidates(enriched.map(item => item.candidate as ScholarshipCandidate));
     const eligible: ScholarshipCandidate[] = [];
+    const candidateStates = new Map<string, "eligible" | "review-needed" | "rejected">();
     for (const candidate of candidates) {
       const scored = scoreCandidate(profile, candidate);
-      if (scored.eligibility === "not_eligible") continue;
+      const key = canonicalCandidateKey(candidate);
+      if (scored.eligibility === "not_eligible") { candidateStates.set(key, "rejected"); continue; }
+      candidateStates.set(key, scored.eligibility === "cannot_determine" ? "review-needed" : "eligible");
       eligible.push(candidate);
     }
-    diagnostics.eligible = eligible.length;
-    diagnostics.reviewNeeded = candidates.length - eligible.length;
+    diagnostics.eligible = eligible.filter(candidate => candidateStates.get(canonicalCandidateKey(candidate)) === "eligible").length;
+    diagnostics.reviewNeeded = eligible.filter(candidate => candidateStates.get(canonicalCandidateKey(candidate)) === "review-needed").length;
 
-    const repository = process.env.DATABASE_URL ? createScholarshipRepository(process.env.DATABASE_URL) : undefined;
+    const persistenceInputs = enriched.map(item => {
+      const key = canonicalCandidateKey(item.candidate);
+      const status = candidateStates.get(key) ?? item.record.discoveryState ?? "review-needed";
+      return { record: { ...item.record, discoveryState: status }, status };
+    });
+
     let persisted = 0;
-    if (repository) {
-      for (const record of selected) await repository.recordDiscovery({ url: record.url, title: record.title, source: record.source, discoveryMethod: record.discoveryMethod, query: record.query });
+    if (process.env.DATABASE_URL) {
+      const result = await recordDiscoveryProvenance(persistenceInputs);
+      persisted = result.persisted;
+      const repository = createScholarshipRepository(process.env.DATABASE_URL);
       for (const candidate of eligible) {
         await repository.upsertScholarship({
           canonicalKey: canonicalCandidateKey(candidate), title: candidate.title, provider: candidate.provider,
           university: candidate.university, country: candidate.country, degreeLevel: candidate.degreeLevel,
           opportunityType: candidate.opportunityType, fields: candidate.fields, sourceUrl: candidate.sourceUrl,
           applicationUrl: candidate.applicationUrl, fundingClass: candidate.fundingClass, deadline: candidate.deadline,
-          eligibility: candidate.eligibility, requirements: candidate.requirements, evidence: candidate.evidence
+          eligibility: candidate.eligibility, requirements: candidate.requirements
         });
         persisted += 1;
       }
@@ -114,29 +126,27 @@ export class DiscoveryEngine {
 }
 
 function uniqueDiscoveryRecords(records: DiscoveryRecord[]): DiscoveryRecord[] {
-  const seen = new Map<string, DiscoveryRecord>();
+  const byUrl = new Map<string, DiscoveryRecord>();
   for (const record of records) {
     const key = canonicalUrl(record.url);
     if (!key) continue;
-    const existing = seen.get(key);
-    if (!existing || recordCompleteness(record) > recordCompleteness(existing)) seen.set(key, { ...record, url: key });
+    const existing = byUrl.get(key);
+    if (!existing || recordCompleteness(record) > recordCompleteness(existing)) byUrl.set(key, { ...record, url: key });
   }
   const byIdentity = new Map<string, DiscoveryRecord>();
-  for (const record of seen.values()) {
-    const identity = `${normalizeText(record.title)}::${normalizeText((record as any).provider ?? record.source)}`;
+  for (const record of byUrl.values()) {
+    const title = normalizeText(record.title);
+    const provider = normalizeText((record as DiscoveryRecord & { provider?: string }).provider ?? hostOf(record.url) ?? record.source);
+    const identity = title ? `${title}::${provider}` : canonicalUrl(record.url);
     const existing = byIdentity.get(identity);
     if (!existing || recordCompleteness(record) > recordCompleteness(existing)) byIdentity.set(identity, record);
   }
   return [...byIdentity.values()];
 }
-
-function recordCompleteness(record: DiscoveryRecord): number {
-  return [record.title, record.snippet, record.sourceUrl, record.originalUrl, record.sourceEngine, record.discoveryState].filter(Boolean).length;
-}
-
-function normalizeText(value: unknown): string { return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
+function recordCompleteness(record: DiscoveryRecord): number { return [record.title, record.snippet, record.sourceUrl, record.originalUrl, record.sourceEngine, record.discoveryState].filter(Boolean).length; }
+function normalizeText(value: unknown): string { return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " "); }
 function canonicalCandidateKey(candidate: ScholarshipCandidate): string { return `${normalizeText(candidate.title)}::${normalizeText(candidate.provider)}`; }
-
+function hostOf(value: string): string | undefined { try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); } catch { return undefined; } }
 function canonicalUrl(value: string): string {
   try {
     const url = new URL(value.trim());
