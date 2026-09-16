@@ -40,12 +40,17 @@ export function buildApplicantIntelligence(profile: ApplicantProfile): Applicant
   if (profile.academicScore !== undefined) evidence.push({ field: "academicScore", value: `${profile.academicScore}/${profile.academicScale ?? "?"}`, confidence: 1, source: "profile" });
   if (profile.researchExperience) evidence.push({ field: "researchExperience", value: profile.researchExperience.slice(0, 500), confidence: 1, source: "profile" });
 
+  const degreeTerm = profile.degreeLevel === "masters" ? "MSc" : profile.degreeLevel === "phd" ? "PhD" : profile.degreeLevel === "undergraduate" ? "Bachelor" : undefined;
+  const fundingTerms = profile.minimumFunding === "full"
+    ? ["fully funded", "full funding", "all expenses covered"]
+    : ["fully funded", "substantially funded", "tuition funding", "stipend"];
   const searchTerms = unique([
     ...normalizedFields,
     ...researchThemes,
     ...skills,
-    profile.degreeLevel === "masters" ? "MSc" : profile.degreeLevel,
-    "fully funded", "studentship", "graduate research position", "funded thesis", "international students"
+    ...(degreeTerm ? [degreeTerm] : []),
+    ...fundingTerms,
+    "international students"
   ]).slice(0, 40);
 
   const completeness = completenessScore(profile, normalizedFields, researchThemes, skills);
