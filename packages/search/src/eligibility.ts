@@ -37,6 +37,10 @@ export function assessEligibility(profile: ApplicantProfile, candidate: Scholars
     return { status: "not_eligible", confidence: 0.98, reasons: [`Opportunity country (${candidate.country}) is excluded by the applicant`] };
   }
 
+  if (candidate.country && profile.excludedCountries?.some((country) => samePlace(country, candidate.country))) {
+    return { status: "not_eligible", confidence: 0.98, reasons: [`Opportunity country (${candidate.country}) is excluded by the applicant`] };
+  }
+
   const degreeTerms = degreeAliases[profile.degreeLevel] ?? [];
   const hasDegreeSignal = profile.degreeLevel === "other" || degreeTerms.some((term) => text.includes(term));
   if (profile.degreeLevel !== "other") {
