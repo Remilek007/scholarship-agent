@@ -15,7 +15,7 @@ Federated discovery (SearXNG + official registries + RSS/API providers)
         ↓
 Canonicalization + multi-source deduplication
         ↓
-Deep page extraction + structured-data extraction
+Deep page extraction + optional Playwright rendering for JS-heavy pages
         ↓
 Funding + deadline + eligibility evidence
         ↓
@@ -37,11 +37,10 @@ The discovery service is deliberately provider-neutral. It can combine:
 - An official-source registry covering government scholarship programmes, international organisations, research ecosystems and scholarship directories.
 - Sitemap discovery plus bounded same-domain crawling for registry seeds.
 - Deep HTML/JSON-LD extraction for application links, deadlines, funding evidence, eligibility evidence and requirements.
+- Optional Playwright rendering for JavaScript-heavy pages when `DISCOVERY_PLAYWRIGHT_ENABLED=true`.
 - Canonical URL normalization that removes tracking parameters while preserving the original discovered URL.
 - Candidate deduplication before enrichment and persistence.
 - Per-run diagnostics for queries, source health, provider failures, raw/unique records, enrichment and verification.
-
-The implementation uses bounded native HTTP crawling so the core service does not require a browser runtime. `DISCOVERY_PLAYWRIGHT_ENABLED` remains available for a future browser-backed adapter where a JavaScript-heavy source cannot be extracted with HTTP alone.
 
 ### SearXNG setup
 
@@ -65,6 +64,16 @@ DISCOVERY_PLAYWRIGHT_ENABLED=false
 ```
 
 These bounds keep discovery from turning into an unbounded crawler. Increase them gradually on a deployment with sufficient resources.
+
+When Playwright is enabled, the crawler reserves part of the page budget for browser fallback and deep extraction can render a likely JavaScript shell before extracting content. The application remains non-fatal if browser startup fails: it falls back to the original HTTP response. For actual JS rendering, the deployment must also have a compatible Playwright browser binary installed.
+
+For a Playwright-enabled deployment, install the browser required by the installed Playwright version during the image/build setup, for example:
+
+```text
+pnpm exec playwright install chromium
+```
+
+If the deployment does not need JS rendering, leave `DISCOVERY_PLAYWRIGHT_ENABLED=false` and no browser binary is required by the discovery workflow.
 
 ## What the system analyzes
 
