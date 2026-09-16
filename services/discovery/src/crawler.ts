@@ -21,6 +21,10 @@ export async function crawlDiscoveryPages(seedUrls: string[], query: string, opt
   const browserCandidates = new Set<string>();
   const seeds = [...new Set(seedUrls.filter(isHttpUrl).map(canonicalUrl))];
   const maxRequests = Math.max(1, options.maxPages);
+  // Reserve part of the crawl budget for JS-rendered fallback pages. Without this,
+  // Cheerio could consume the entire maxRequests budget before Playwright runs.
+  const browserBudget = options.playwrightEnabled && maxRequests >= 2 ? Math.max(1, Math.floor(maxRequests * 0.2)) : 0;
+  const httpBudget = Math.max(1, maxRequests - browserBudget);
   const handler = async ({ request, $, enqueueLinks }: any): Promise<void> => {
     const url = canonicalUrl(request.url); const depth = Number(request.userData?.depth ?? 0); visited.add(url);
     try {
@@ -29,20 +33,20 @@ export async function crawlDiscoveryPages(seedUrls: string[], query: string, opt
       const text = main.replace(/\s+/g, " ").slice(0, 16000);
       if (options.playwrightEnabled && (text.length < 180 || JS_SHELL_HINT.test(text))) browserCandidates.add(url);
       if (relevance(title, text, url)) addRecord(records, { url, originalUrl: url, title, snippet: text.slice(0, 1200), source: "crawlee", discoveryMethod: "crawlee", query, discoveryState: "extracted" });
-      if (depth >= options.maxDepth || visited.size >= maxRequests) return;
+      if (depth >= options.maxDepth || visited.size >= httpBudget) return;
       const links: string[] = [];
       $("a[href]").each((_: number, element: any): void => { const href = $(element).attr("href"); if (!href) return; try { const absolute = canonicalUrl(new URL(href, url).toString()); if (!isHttpUrl(absolute)) return; const anchor = $(element).text().replace(/\s+/g, " ").trim(); if (SCHOLARSHIP_HINT.test(`${anchor} ${absolute}`) || PAGINATION_HINT.test(`${anchor} ${absolute}`)) links.push(absolute); } catch { /* malformed link */ } });
-      const remaining = Math.max(0, maxRequests - visited.size); if (remaining) await enqueueLinks({ urls: [...new Set(links)].slice(0, remaining), userData: { depth: depth + 1 } });
+      const remaining = Math.max(0, httpBudget - visited.size); if (remaining) await enqueueLinks({ urls: [...new Set(links)].slice(0, remaining), userData: { depth: depth + 1 } });
     } catch (error) { failures.push({ url, error: error instanceof Error ? error.message : String(error), stage: "extract" }); }
   };
-  const crawler = new CheerioCrawler({ maxRequestsPerCrawl: maxRequests, maxConcurrency: Math.max(1, options.concurrency), requestHandlerTimeoutSecs: Math.ceil(options.requestTimeoutMs / 1000), maxRequestRetries: 1, requestHandler: handler, failedRequestHandler: async ({ request, error }: any): Promise<void> => { browserCandidates.add(canonicalUrl(request.url)); failures.push({ url: request.url, error: error instanceof Error ? error.message : String(error), stage: "http" }); } });
+  const crawler = new CheerioCrawler({ maxRequestsPerCrawl: httpBudget, maxConcurrency: Math.max(1, options.concurrency), requestHandlerTimeoutSecs: Math.ceil(options.requestTimeoutMs / 1000), maxRequestRetries: 1, requestHandler: handler, failedRequestHandler: async ({ request, error }: any): Promise<void> => { browserCandidates.add(canonicalUrl(request.url)); failures.push({ url: request.url, error: error instanceof Error ? error.message : String(error), stage: "http" }); } });
   if (seeds.length) await crawler.run(seeds.map(url => ({ url, userData: { depth: 0 } })));
-  if (options.playwrightEnabled) {
-    const remainingBrowser = Math.max(0, maxRequests - visited.size); const browserUrls = [...browserCandidates].filter(isHttpUrl).slice(0, remainingBrowser);
+  if (options.playwrightEnabled && browserBudget > 0) {
+    const browserUrls = [...browserCandidates].filter(isHttpUrl).slice(0, browserBudget);
     if (browserUrls.length) {
       const browser = new PlaywrightCrawler({ maxRequestsPerCrawl: browserUrls.length, maxConcurrency: Math.max(1, Math.min(options.concurrency, 4)), maxCrawlDepth: options.maxDepth, requestHandlerTimeoutSecs: Math.ceil(options.requestTimeoutMs / 1000), maxRequestRetries: 1,
         requestHandler: async ({ request, page, enqueueLinks }: any): Promise<void> => {
-          const title = await page.title().catch(() => ""); const text = ((await page.locator("main, article, body").first().innerText().catch(() => "")) as string).replace(/\s+/g, " ").trim(); const url = canonicalUrl(request.url);
+          const title = await page.title().catch(() => ""); const text = ((await page.locator("main, article, body").first().innerText().catch(() => "")) as string).replace(/\s+/g, " ").trim(); const url = canonicalUrl(request.url); visited.add(url);
           if (relevance(title, text, url)) addRecord(records, { url, originalUrl: url, title, snippet: text.slice(0, 1200), source: "playwright", discoveryMethod: "playwright-fallback", query, discoveryState: "extracted" });
           const anchors: Array<{ href: string; label: string }> = await page.locator("a[href]").evaluateAll((elements: Element[]) => elements.map(element => ({ href: (element as HTMLAnchorElement).href, label: element.textContent ?? "" })));
           const links = anchors.filter(item => isHttpUrl(item.href) && (SCHOLARSHIP_HINT.test(`${item.label} ${item.href}`) || PAGINATION_HINT.test(`${item.label} ${item.href}`))).map(item => canonicalUrl(item.href));
