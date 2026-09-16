@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
-  "scripts": {"typecheck": "tsc --noEmit", "build": "tsc", "lint": "tsc --noEmit", "test": "node --experimental-strip-types --test src/*.test.ts"},
+  "scripts": {"typecheck": "tsc --noEmit", "build": "tsc", "lint": "tsc --noEmit", "test": "tsx --test src/*.test.ts"},
   "dependencies": {"@scholarship-agent/shared": "workspace:*"},
-  "devDependencies": {"@types/node": "^24.3.0", "typescript": "^5.9.2"}
+  "devDependencies": {"@types/node": "^24.3.0", "tsx": "^4.20.5", "typescript": "^5.9.2"}
 }
